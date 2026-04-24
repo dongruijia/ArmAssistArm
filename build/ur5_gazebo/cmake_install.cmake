@@ -64,3 +64,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/ur5_moveit_fk.py")
 endif()
 
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/fk_error_calculator.py")
+endif()
+

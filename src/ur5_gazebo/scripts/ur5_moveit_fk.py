@@ -18,7 +18,6 @@ class UR5MoveItFKNode:
         self.pub = rospy.Publisher("/ur5/moveit_end_effector_pose", PoseStamped, queue_size=10)
         self.sub = rospy.Subscriber("/joint_states", JointState, self.joint_cb)
 
-        # ====================== 修复 1：正确的末端 link ======================
         self.ROOT_LINK = "base_link"
         self.TIP_LINK = "wrist_3_link"  # 这里改了！ee_link 不存在
 
