@@ -95,15 +95,28 @@
       <selfCollide>true</selfCollide>
     </gazebo>
 
+    <gazebo reference="${prefix}wrist_3_joint">
+      <provideFeedback>true</provideFeedback>
+    </gazebo>
+
     <!--
       Inject Gazebo ROS Control plugin, which allows us to use ros_control
       controllers to control the virtual robot hw.
     -->
     <gazebo>
+      <plugin name="${prefix}ft_sensor_controller" filename="libgazebo_ros_ft_sensor.so">
+        <alwaysOn>true</alwaysOn>
+        <updateRate>1000</updateRate>
+        <topicName>/ur5/ft_sensor/wrench</topicName>
+        <jointName>${prefix}wrist_3_joint</jointName>
+        <frameName>${prefix}flange</frameName>
+      </plugin>
       <plugin name="ros_control" filename="libgazebo_ros_control.so">
         <!--robotNamespace>/</robotNamespace-->
         <!--robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType-->
       </plugin>
     </gazebo>
+    
   </xacro:macro>
+ 
 </robot>
