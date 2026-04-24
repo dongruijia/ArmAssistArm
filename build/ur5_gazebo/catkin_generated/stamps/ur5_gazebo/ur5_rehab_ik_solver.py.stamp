@@ -5,6 +5,7 @@ import numpy as np
 import rospy
 import tf.transformations as tf_t
 from geometry_msgs.msg import PoseStamped
+from scipy.optimize import least_squares
 from sensor_msgs.msg import JointState
 
 
@@ -72,6 +73,8 @@ class UR5RehabIKSolver:
         self.max_iter = rospy.get_param("~max_iter", 250)
         self.tol_pos = rospy.get_param("~tol_pos", 1e-4)
         self.tol_ori = rospy.get_param("~tol_ori", 1.7e-3)
+        self.success_tol_pos = float(rospy.get_param("~success_tol_pos", 1e-3))
+        self.success_tol_ori = float(rospy.get_param("~success_tol_ori", 5e-3))
         self.lambda_base = rospy.get_param("~lambda_base", 0.02)
         self.lambda_sing_gain = rospy.get_param("~lambda_sing_gain", 0.25)
         self.step = rospy.get_param("~step", 0.7)
@@ -79,6 +82,10 @@ class UR5RehabIKSolver:
         self.null_gain = rospy.get_param("~null_gain", 0.08)
         self.target_change_eps = rospy.get_param("~target_change_eps", 1e-8)
         self.prefer_last_solution = bool(rospy.get_param("~prefer_last_solution", True))
+        self.position_only = bool(rospy.get_param("~position_only", True))
+        self.orientation_weight = float(rospy.get_param("~orientation_weight", 0.05))
+        self.regularization_weight = float(rospy.get_param("~regularization_weight", 0.01))
+        self.max_nfev = int(rospy.get_param("~max_nfev", 2000))
 
         rospy.loginfo("UR5 rehab IK node started, target topic: %s", self.target_topic)
 
@@ -168,6 +175,20 @@ class UR5RehabIKSolver:
             w = 0.0
         return self.lambda_base + self.lambda_sing_gain / (w + 1e-6)
 
+    def _pose_residual(self, q, Td, q_ref):
+        Tc = self.fk(q)
+        ep = Td[:3, 3] - Tc[:3, 3]
+        residual = [ep]
+
+        if not self.position_only:
+            eo = self._orientation_error(Tc[:3, :3], Td[:3, :3])
+            residual.append(self.orientation_weight * eo)
+
+        if self.regularization_weight > 0.0:
+            residual.append(self.regularization_weight * (q - q_ref))
+
+        return np.hstack(residual)
+
     def ik_solve(self, target_pose, q0):
         tx, ty, tz, qx, qy, qz, qw = target_pose
         Td = tf_t.quaternion_matrix([qx, qy, qz, qw])
@@ -175,39 +196,31 @@ class UR5RehabIKSolver:
         q = np.clip(np.array(q0, dtype=float), self.joint_limits[0], self.joint_limits[1])
         q_ref = q.copy()
 
-        pos_weight = 1.0
-        ori_weight = 0.7
-        identity = np.eye(6)
+        result = least_squares(
+            lambda joints: self._pose_residual(joints, Td, q_ref),
+            q,
+            bounds=(self.joint_limits[0], self.joint_limits[1]),
+            max_nfev=self.max_nfev,
+            xtol=1e-10,
+            ftol=1e-10,
+            gtol=1e-10,
+            method="trf",
+        )
 
-        for it in range(self.max_iter):
-            Tc = self.fk(q)
-            ep = Td[:3, 3] - Tc[:3, 3]
-            eo = self._orientation_error(Tc[:3, :3], Td[:3, :3])
-            if np.linalg.norm(ep) < self.tol_pos and np.linalg.norm(eo) < self.tol_ori:
-                return q.copy(), True, it + 1, np.linalg.norm(ep), np.linalg.norm(eo)
-
-            J = self.jacobian(q)
-            Jw = J.copy()
-            Jw[:3, :] *= pos_weight
-            Jw[3:, :] *= ori_weight
-
-            e = np.hstack((pos_weight * ep, ori_weight * eo))
-            lam = self._adaptive_lambda(Jw)
-            Jd = Jw.T @ np.linalg.inv(Jw @ Jw.T + (lam ** 2) * identity)
-
-            grad = 0.7 * (q_ref - q) + 0.3 * (self.joint_centers - q)
-            N = identity - Jd @ Jw
-            dq = self.step * (Jd @ e + self.null_gain * (N @ grad))
-            dq_norm = np.linalg.norm(dq)
-            if dq_norm > self.max_step_norm:
-                dq *= self.max_step_norm / (dq_norm + 1e-12)
-
-            q = np.clip(q + dq, self.joint_limits[0], self.joint_limits[1])
-
-        Tc = self.fk(q)
+        q_sol = np.clip(result.x, self.joint_limits[0], self.joint_limits[1])
+        Tc = self.fk(q_sol)
         ep = Td[:3, 3] - Tc[:3, 3]
         eo = self._orientation_error(Tc[:3, :3], Td[:3, :3])
-        return q.copy(), False, self.max_iter, np.linalg.norm(ep), np.linalg.norm(eo)
+
+        pos_ok = np.linalg.norm(ep) < max(self.tol_pos, self.success_tol_pos)
+        ori_ok = np.linalg.norm(eo) < max(self.tol_ori, self.success_tol_ori)
+
+        if self.position_only:
+            ok = pos_ok
+        else:
+            ok = pos_ok and ori_ok
+
+        return q_sol.copy(), ok, int(result.nfev), np.linalg.norm(ep), np.linalg.norm(eo)
 
     def pose_callback(self, msg):
         try:

@@ -27,7 +27,7 @@ class UR5RehabTrajectoryController:
         self.ik_output_topic = rospy.get_param("~ik_output_topic", "/ur5/rehab_ik_solved_joints")
         self.dt = float(rospy.get_param("~sample_dt", 0.01))
         self.start_delay = float(rospy.get_param("~start_delay", 0.5))
-        self.pause_between = float(rospy.get_param("~pause_between", 1.0))
+        self.pause_between = float(rospy.get_param("~pause_between", 0.2))
         self.run_mode = rospy.get_param("~trajectory_mode", "all")
         self.loop = bool(rospy.get_param("~loop", False))
         self.ik_timeout = float(rospy.get_param("~ik_timeout", 0.5))
@@ -36,8 +36,6 @@ class UR5RehabTrajectoryController:
         self.has_joint_state = False
         self.latest_ik_solution = None
         self.latest_ik_stamp = rospy.Time(0)
-        self.latest_ik_seq = -1
-        self.pose_sequence = 0
 
         self.command_pub = rospy.Publisher(self.command_topic, JointTrajectory, queue_size=1)
         self.target_pub = rospy.Publisher(self.target_topic, PoseStamped, queue_size=1)
@@ -57,7 +55,6 @@ class UR5RehabTrajectoryController:
             joint_map = dict(zip(msg.name, msg.position))
             self.latest_ik_solution = np.array([joint_map[name] for name in JOINT_NAMES], dtype=float)
             self.latest_ik_stamp = msg.header.stamp
-            self.latest_ik_seq = msg.header.seq
         except Exception:
             return
 
@@ -183,7 +180,6 @@ class UR5RehabTrajectoryController:
 
     def request_ik_solution(self, point, orientation):
         pose = PoseStamped()
-        pose.header.seq = self.pose_sequence
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "base_link"
         pose.pose.position.x = float(point[0])
@@ -194,19 +190,17 @@ class UR5RehabTrajectoryController:
         pose.pose.orientation.z = float(orientation[2])
         pose.pose.orientation.w = float(orientation[3])
 
-        expected_seq = self.pose_sequence
         expected_stamp = pose.header.stamp
-        self.pose_sequence += 1
         self.target_pub.publish(pose)
 
         deadline = rospy.Time.now() + rospy.Duration.from_sec(self.ik_timeout)
         rate = rospy.Rate(500)
         while not rospy.is_shutdown():
             if self.latest_ik_solution is not None:
-                if self.latest_ik_seq == expected_seq and self.latest_ik_stamp == expected_stamp:
+                if self.latest_ik_stamp == expected_stamp:
                     return self.latest_ik_solution.copy()
             if rospy.Time.now() > deadline:
-                raise RuntimeError("Timeout waiting IK response for pose seq=%d" % expected_seq)
+                raise RuntimeError("Timeout waiting IK response for pose stamp=%s" % str(expected_stamp.to_sec()))
             rate.sleep()
 
     def solve_joint_trajectory(self, name, times, cart_points, orientation):

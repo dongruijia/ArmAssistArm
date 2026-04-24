@@ -57,6 +57,14 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/ur5_external_wrench_applier.py")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/ur5_ft_wrench_corrector.py")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/ur5_forward_kinematics.py")
 endif()
 
@@ -82,5 +90,13 @@ endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/ur5_rehab_trajectory_controller.py")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/ur5_rehab_stability_line_controller.py")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo/catkin_generated/installspace/ur5_rehab_tracking_error_monitor.py")
 endif()
 

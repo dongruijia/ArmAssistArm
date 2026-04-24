@@ -1,0 +1,38 @@
+<launch>
+  <arg name="sample_dt" default="0.01"/>
+  <arg name="start_delay" default="0.5"/>
+
+  <include file="$(find ur_gazebo)/launch/ur5_bringup.launch">
+    <arg name="paused" value="false"/>
+    <arg name="gui" value="true"/>
+    <arg name="transmission_hw_interface" value="hardware_interface/PositionJointInterface"/>
+    <arg name="controller_config_file" value="$(find ur5_gazebo)/config/ur5_controllers.yaml"/>
+    <arg name="controllers" value="joint_state_controller ur5_arm_controller"/>
+  </include>
+
+  <node pkg="ur5_gazebo" type="ur5_rehab_ik_solver.py" name="ur5_rehab_ik_solver" output="screen">
+    <param name="target_topic" value="/ur5/stability_target_pose"/>
+    <param name="output_topic" value="/ur5/stability_ik_solved_joints"/>
+    <param name="position_only" value="true"/>
+  </node>
+
+  <node pkg="ur5_gazebo" type="ur5_rehab_tracking_error_monitor.py" name="ur5_rehab_tracking_error_monitor" output="screen">
+    <param name="reference_topic" value="/ur5/stability_reference_pose"/>
+    <param name="joint_topic" value="/joint_states"/>
+    <param name="sample_dt" value="$(arg sample_dt)"/>
+    <param name="expected_duration" value="5.0"/>
+    <param name="match_tolerance" value="0.03"/>
+    <param name="eval_start_delay" value="1.5"/>
+    <param name="eval_start_min_z" value="0.45"/>
+  </node>
+
+  <node pkg="ur5_gazebo" type="ur5_rehab_stability_line_controller.py" name="ur5_rehab_stability_line_controller" output="screen">
+    <param name="target_topic" value="/ur5/stability_target_pose"/>
+    <param name="reference_topic" value="/ur5/stability_reference_pose"/>
+    <param name="ik_output_topic" value="/ur5/stability_ik_solved_joints"/>
+    <param name="command_topic" value="/ur5_arm_controller/command"/>
+    <param name="sample_dt" value="$(arg sample_dt)"/>
+    <param name="start_delay" value="$(arg start_delay)"/>
+    <rosparam param="orientation_quat">[0.0, 1.0, 0.0, 0.0]</rosparam>
+  </node>
+</launch>

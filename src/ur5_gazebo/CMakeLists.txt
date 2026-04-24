@@ -180,6 +180,8 @@ catkin_install_python(PROGRAMS
   scripts/ur5_ik_verifier.py
   scripts/ur5_rehab_ik_solver.py
   scripts/ur5_rehab_trajectory_controller.py
+  scripts/ur5_rehab_stability_line_controller.py
+  scripts/ur5_rehab_tracking_error_monitor.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
