@@ -1,0 +1,29 @@
+<launch>
+  <arg name="raw_topic" default="/ur5/ft_sensor/wrench"/>
+  <arg name="corrected_topic" default="/ur5/ft_sensor/wrench_corrected"/>
+  <arg name="tare_topic" default="/ur5/ft_sensor/tare"/>
+
+  <arg name="use_initial_tare" default="false"/>
+  <arg name="tare_sample_count" default="500"/>
+  <arg name="require_tare_before_publish" default="true"/>
+
+  <arg name="static_force_bias" default="[0.0, 0.0, 0.0]"/>
+  <arg name="static_torque_bias" default="[0.0, 0.0, 0.0]"/>
+  <arg name="force_scale" default="[1.0, 1.0, 1.0]"/>
+  <arg name="torque_scale" default="[1.0, 1.0, 1.0]"/>
+
+  <node pkg="ur5_gazebo" type="ur5_ft_wrench_corrector.py" name="ur5_ft_wrench_corrector" output="screen">
+    <param name="raw_topic" value="$(arg raw_topic)"/>
+    <param name="corrected_topic" value="$(arg corrected_topic)"/>
+    <param name="tare_topic" value="$(arg tare_topic)"/>
+
+    <param name="use_initial_tare" value="$(arg use_initial_tare)"/>
+    <param name="tare_sample_count" value="$(arg tare_sample_count)"/>
+    <param name="require_tare_before_publish" value="$(arg require_tare_before_publish)"/>
+
+    <rosparam param="static_force_bias" subst_value="true">$(arg static_force_bias)</rosparam>
+    <rosparam param="static_torque_bias" subst_value="true">$(arg static_torque_bias)</rosparam>
+    <rosparam param="force_scale" subst_value="true">$(arg force_scale)</rosparam>
+    <rosparam param="torque_scale" subst_value="true">$(arg torque_scale)</rosparam>
+  </node>
+</launch>

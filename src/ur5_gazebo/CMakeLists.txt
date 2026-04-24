@@ -172,6 +172,7 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/ur5_demo_motion.py
   scripts/ur5_external_wrench_applier.py
+  scripts/ur5_ft_wrench_corrector.py
   scripts/ur5_forward_kinematics.py
   scripts/ur5_moveit_fk.py
   scripts/fk_error_calculator.py
