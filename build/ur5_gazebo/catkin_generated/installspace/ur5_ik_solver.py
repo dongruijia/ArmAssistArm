@@ -2,6 +2,7 @@
 import rospy
 import numpy as np
 import tf.transformations as tf_t
+from collections import deque
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
 
@@ -29,6 +30,8 @@ class UR5IKNewtonRaphson:
         self.current_joints = np.zeros(6)
         self.has_joint_state = False
         self.last_target = None
+        self.current_joint_stamp = rospy.Time(0)
+        self.joint_state_history = deque(maxlen=200)
 
         self.dh = [
             (np.pi/2, 0, 0.089159),
@@ -72,10 +75,33 @@ class UR5IKNewtonRaphson:
     def joint_state_cb(self, msg):
         try:
             joint_map = dict(zip(msg.name, msg.position))
-            self.current_joints = np.array([joint_map[name] for name in self.joint_names])
+            joint_values = np.array([joint_map[name] for name in self.joint_names])
+            self.current_joints = joint_values
             self.has_joint_state = True
+            self.current_joint_stamp = msg.header.stamp
+            self.joint_state_history.append((msg.header.stamp, joint_values.copy()))
         except Exception:
             pass
+
+    def _find_seed_for_target(self, target_stamp):
+        if not self.joint_state_history:
+            return self.current_joints.copy(), self.current_joint_stamp
+
+        if target_stamp == rospy.Time(0):
+            stamp, joints = self.joint_state_history[-1]
+            return joints.copy(), stamp
+
+        best_stamp, best_joints = self.joint_state_history[-1]
+        best_dt = abs((best_stamp - target_stamp).to_sec())
+
+        for stamp, joints in self.joint_state_history:
+            dt = abs((stamp - target_stamp).to_sec())
+            if dt < best_dt:
+                best_dt = dt
+                best_stamp = stamp
+                best_joints = joints
+
+        return best_joints.copy(), best_stamp
 
     def _dh_A(self, alpha, a, d, q):
         T_rz = tf_t.rotation_matrix(q, (0, 0, 1))
@@ -195,7 +221,8 @@ class UR5IKNewtonRaphson:
                     return
             self.last_target = target.copy()
 
-            q_sol, ok, iters, p_res, o_res = self.ik_solve(target, q0=self.current_joints)
+            seed_joints, seed_stamp = self._find_seed_for_target(msg.header.stamp)
+            q_sol, ok, iters, p_res, o_res = self.ik_solve(target, q0=seed_joints)
 
             if not ok:
                 rospy.logwarn(
@@ -207,14 +234,14 @@ class UR5IKNewtonRaphson:
                 return
 
             jnt = JointState()
-            jnt.header.stamp = rospy.Time.now()
+            jnt.header.stamp = seed_stamp
             jnt.name = self.joint_names
             jnt.position = q_sol.tolist()
             self.ik_joint_pub.publish(jnt)
 
             T_check = self.fk(q_sol)
             p_err = np.linalg.norm(np.array([p.x, p.y, p.z]) - T_check[:3, 3])
-            q_err_deg = np.abs(q_sol - self.current_joints) * RAD2DEG
+            q_err_deg = np.abs(q_sol - seed_joints) * RAD2DEG
             max_joint_err_deg = float(np.max(q_err_deg))
 
             rospy.loginfo(

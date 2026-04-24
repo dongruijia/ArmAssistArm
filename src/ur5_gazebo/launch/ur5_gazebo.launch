@@ -1,15 +1,37 @@
 <launch>
+  <arg name="trajectory_mode" default="all"/>
+  <arg name="loop" default="false"/>
+  <arg name="sample_dt" default="0.01"/>
+  <arg name="start_delay" default="0.5"/>
+  <arg name="pause_between" default="0.2"/>
+
   <!-- 使用官方 ur_gazebo 组合，自动加载带 gazebo_ros_control 的 UR5 模型 -->
   <include file="$(find ur_gazebo)/launch/ur5_bringup.launch">
     <arg name="paused" value="false"/>
     <arg name="gui" value="true"/>
     <arg name="transmission_hw_interface" value="hardware_interface/PositionJointInterface"/>
     <arg name="controller_config_file" value="$(find ur5_gazebo)/config/ur5_controllers.yaml"/>
+    <!-- 启动yaml文件中的两个控制器 -->
     <arg name="controllers" value="joint_state_controller ur5_arm_controller"/>
 
   </include>
 
-  <!-- 启动演示节点，周期发布轨迹命令 -->
-  <node pkg="ur5_gazebo" type="ur5_demo_motion.py" name="ur5_demo_motion" output="screen"/>
+  <!-- 启动康复训练 IK 节点，负责将笛卡尔目标点转换为关节角 -->
+  <node pkg="ur5_gazebo" type="ur5_rehab_ik_solver.py" name="ur5_rehab_ik_solver" output="screen">
+    <param name="target_topic" value="/ur5/rehab_target_pose"/>
+    <param name="output_topic" value="/ur5/rehab_ik_solved_joints"/>
+  </node>
+
+  <!-- 启动康复训练轨迹跟踪节点，生成三类五次插值笛卡尔轨迹并发送至位置控制器 -->
+  <node pkg="ur5_gazebo" type="ur5_rehab_trajectory_controller.py" name="ur5_rehab_trajectory_controller" output="screen">
+    <param name="target_topic" value="/ur5/rehab_target_pose"/>
+    <param name="ik_output_topic" value="/ur5/rehab_ik_solved_joints"/>
+    <param name="command_topic" value="/ur5_arm_controller/command"/>
+    <param name="trajectory_mode" value="$(arg trajectory_mode)"/>
+    <param name="loop" value="$(arg loop)"/>
+    <param name="sample_dt" value="$(arg sample_dt)"/>
+    <param name="start_delay" value="$(arg start_delay)"/>
+    <param name="pause_between" value="$(arg pause_between)"/>
+  </node>
 
 </launch>

@@ -9,9 +9,12 @@ project(ur5_gazebo)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   control_msgs
+  geometry_msgs
   gazebo_ros
   rospy
+  sensor_msgs
   std_msgs
+  tf
   trajectory_msgs
 )
 
@@ -171,6 +174,9 @@ catkin_install_python(PROGRAMS
   scripts/ur5_moveit_fk.py
   scripts/fk_error_calculator.py
   scripts/ur5_ik_solver.py
+  scripts/ur5_ik_verifier.py
+  scripts/ur5_rehab_ik_solver.py
+  scripts/ur5_rehab_trajectory_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
