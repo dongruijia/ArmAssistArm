@@ -1,0 +1,8 @@
+prefix=/home/jiaid/ur5_rehab_ws/install
+
+Name: combined_robot_hw_tests
+Description: Description of combined_robot_hw_tests
+Version: 0.20.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,65 @@
+ur5_arm_controller:
+  type: position_controllers/JointTrajectoryController
+  joints:
+    - shoulder_pan_joint
+    - shoulder_lift_joint
+    - elbow_joint
+    - wrist_1_joint
+    - wrist_2_joint
+    - wrist_3_joint
+  #PID参数
+  gains:
+    shoulder_pan_joint: {p: 1000.0, i: 0.0, d: 100.0}
+    shoulder_lift_joint: {p: 1000.0, i: 0.0, d: 100.0}
+    elbow_joint: {p: 1000.0, i: 0.0, d: 100.0}
+    wrist_1_joint: {p: 1000.0, i: 0.0, d: 50.0}
+    wrist_2_joint: {p: 1000.0, i: 0.0, d: 50.0}
+    wrist_3_joint: {p: 1000.0, i: 0.0, d: 50.0}
+  #关节限位
+  constraints:
+    goal_time: 0.6
+    stopped_velocity_tolerance: 0.05
+
+    shoulder_pan_joint:
+      trajectory: 0.1
+      goal: 0.1
+      min_pos: -6.28
+      max_pos: 6.28
+
+    shoulder_lift_joint:
+      trajectory: 0.1
+      goal: 0.1
+      min_pos: -3.14
+      max_pos: 0
+
+    elbow_joint:
+      trajectory: 0.1
+      goal: 0.1
+      min_pos: -3.14
+      max_pos: 3.14
+
+    wrist_1_joint:
+      trajectory: 0.1
+      goal: 0.1
+      min_pos: -3.14
+      max_pos: 3.14
+
+    wrist_2_joint:
+      trajectory: 0.1
+      goal: 0.1
+      min_pos: -3.14
+      max_pos: 3.14
+
+    wrist_3_joint:
+      trajectory: 0.1
+      goal: 0.1
+      min_pos: -6.28
+      max_pos: 6.28
+  #更新频率
+  state_publish_rate: 50
+  action_monitor_rate: 50
+  stop_trajectory_duration: 0.5
+
+joint_state_controller:
+  type: joint_state_controller/JointStateController
+  publish_rate: 50
