@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import rospy
 import numpy as np
+from collections import deque
 from sensor_msgs.msg import JointState
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 
 DEG2RAD = np.pi / 180.0
 RAD2DEG = 180.0 / np.pi
@@ -22,82 +20,79 @@ class IKAccuracyVerifier:
             "wrist_3_joint"
         ]
 
-        self.original_joints = None
-        self.ik_solved_joints = None
-
-        # 绘图缓存
-        self.max_err_history = []
-        self.limit_line = [0.1] * 50  # 0.1° 红线
-        self.max_points = 50
+        self.original_buffer = deque(maxlen=200)
+        self.match_tolerance = rospy.get_param("~match_tolerance", 0.05)
 
         # 订阅话题
         rospy.Subscriber("/joint_states", JointState, self.original_cb)
         rospy.Subscriber("/ur5/ik_solved_joints", JointState, self.ik_cb)
 
-        # 初始化画布
-        self.fig, self.ax = plt.subplots(figsize=(10, 4))
-        self.ax.set_ylim(0, 0.3)
-        self.ax.set_title("IK 角度误差实时波形 (最大误差)")
-        self.ax.set_ylabel("误差 (°)")
-        self.ax.set_xlabel("时间点")
-        self.ax.grid(True)
-
-        # 画 0.1° 合格线
-        self.line_limit, = self.ax.plot(range(50), self.limit_line, 'r--', label="0.1° 合格线", linewidth=2)
-        self.line_err, = self.ax.plot([], [], 'b-', label="实时最大误差", linewidth=2)
-        self.ax.legend()
-
-        rospy.loginfo("✅ IK 精度验证节点（带实时波形图）已启动")
+        rospy.loginfo("✅ IK 精度验证节点 | 实时监测角度误差 ≤0.1°")
+        rospy.loginfo("================================================")
 
     def original_cb(self, msg):
         try:
             joint_map = dict(zip(msg.name, msg.position))
-            self.original_joints = np.array([joint_map[name] for name in self.joint_names])
-            self.compute_error()
-        except:
+            original_joints = np.array([joint_map[name] for name in self.joint_names])
+            self.original_buffer.append((msg.header.stamp, original_joints))
+        except Exception:
             return
 
     def ik_cb(self, msg):
         try:
             joint_map = dict(zip(msg.name, msg.position))
-            self.ik_solved_joints = np.array([joint_map[name] for name in self.joint_names])
-            self.compute_error()
-        except:
+            ik_solved_joints = np.array([joint_map[name] for name in self.joint_names])
+            self.compute_error(msg.header.stamp, ik_solved_joints)
+        except Exception:
             return
 
-    def compute_error(self):
-        if self.original_joints is None or self.ik_solved_joints is None:
+    def _find_matching_original(self, ik_stamp):
+        if not self.original_buffer:
+            return None
+
+        best_joints = None
+        best_idx = None
+        best_dt = None
+
+        for idx, (stamp, joints) in enumerate(self.original_buffer):
+            dt = abs((stamp - ik_stamp).to_sec())
+            if best_dt is None or dt < best_dt:
+                best_dt = dt
+                best_idx = idx
+                best_joints = joints
+
+        if best_dt is None or best_dt > self.match_tolerance:
+            return None
+
+        while len(self.original_buffer) > best_idx + 1:
+            self.original_buffer.popleft()
+
+        self.original_buffer.popleft()
+        return best_joints
+
+    def compute_error(self, ik_stamp, ik_solved_joints):
+        original_joints = self._find_matching_original(ik_stamp)
+        if original_joints is None:
+            rospy.logwarn_throttle(1.0, "[监测] 等待匹配的关节数据...")
             return
 
-        err_rad = np.abs(self.original_joints - self.ik_solved_joints)
+        err_rad = np.abs(original_joints - ik_solved_joints)
         err_deg = err_rad * RAD2DEG
         max_err = np.max(err_deg)
         mean_err = np.mean(err_deg)
 
-        # 保存历史，画波形
-        self.max_err_history.append(max_err)
-        if len(self.max_err_history) > self.max_points:
-            self.max_err_history.pop(0)
-
-        # 打印
-        rospy.loginfo(f"📊 最大误差={max_err:.3f}° | 平均={mean_err:.3f}°")
+        # 实时打印结果
+        rospy.loginfo(f"📊 最大误差={max_err:.3f}° | 平均误差={mean_err:.3f}°")
         if max_err <= 0.1:
-            rospy.loginfo(f"✅ 精度合格 ≤0.1°")
+            rospy.loginfo(f"✅ 精度合格：角度误差 ≤ 0.1°")
         else:
             rospy.logwarn(f"⚠️ 精度不合格")
-
-    def update_plot(self, frame):
-        x = list(range(len(self.max_err_history)))
-        y = self.max_err_history
-        self.line_err.set_data(x, y)
-        return self.line_err, self.line_limit
-
-    def start_plot(self):
-        ani = animation.FuncAnimation(
-            self.fig, self.update_plot, interval=200, blit=True, cache_frame_data=False
-        )
-        plt.show()
+        
+        rospy.loginfo("================================================")
 
 if __name__ == "__main__":
-    node = IKAccuracyVerifier()
-    node.start_plot()
+    try:
+        node = IKAccuracyVerifier()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        pass
