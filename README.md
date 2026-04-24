@@ -310,6 +310,4 @@ roslaunch ur5_gazebo ur5_ft_wrench_corrector.launch
    roslaunch ur5_gazebo_advance ur5_admittance_control.launch
    ```
 
----
 
-如果你希望，我还可以继续补一份“英文版 README”或“论文实验复现实验脚本（bash 一键跑三组实验）”。
