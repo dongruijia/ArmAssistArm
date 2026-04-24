@@ -170,6 +170,7 @@ catkin_install_python(PROGRAMS
   scripts/ur5_forward_kinematics.py
   scripts/ur5_moveit_fk.py
   scripts/fk_error_calculator.py
+  scripts/ur5_ik_solver.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
