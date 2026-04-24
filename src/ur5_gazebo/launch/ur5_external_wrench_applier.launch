@@ -1,0 +1,22 @@
+<launch>
+  <!-- 正确的 body 名称 -->
+  <arg name="body_name" default="robot::wrist_3_link"/>
+
+  <arg name="command_topic" default="/ur5/ft_sensor/command_wrench"/>
+  <arg name="reference_frame" default="world"/>
+  <arg name="apply_rate_hz" default="100.0"/>
+  <arg name="command_timeout" default="0.3"/>
+
+  <!-- 关闭自动启动 rqt -->
+  <arg name="start_rqt_publisher" default="false"/>
+
+  <node pkg="ur5_gazebo" type="ur5_external_wrench_applier.py" name="ur5_external_wrench_applier" output="screen">
+    <param name="body_name" value="$(arg body_name)"/>
+    <param name="command_topic" value="$(arg command_topic)"/>
+    <param name="reference_frame" value="$(arg reference_frame)"/>
+    <param name="apply_rate_hz" value="$(arg apply_rate_hz)"/>
+    <param name="command_timeout" value="$(arg command_timeout)"/>
+    <param name="use_msg_frame" value="false"/>
+  </node>
+
+</launch>
