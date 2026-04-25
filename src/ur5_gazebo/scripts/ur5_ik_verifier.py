@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""验证逆运动学求解结果与实际关节状态的偏差。"""
+
 import rospy
 import numpy as np
 from collections import deque
@@ -8,6 +10,8 @@ DEG2RAD = np.pi / 180.0
 RAD2DEG = 180.0 / np.pi
 
 class IKAccuracyVerifier:
+    """比较 IK 输出与原始关节状态，检查解算精度。"""
+
     def __init__(self):
         rospy.init_node("ik_accuracy_verifier", anonymous=True)
 
@@ -47,6 +51,8 @@ class IKAccuracyVerifier:
             return
 
     def _find_matching_original(self, ik_stamp):
+        """在缓冲区中寻找时间上最接近的原始关节状态。"""
+
         if not self.original_buffer:
             return None
 
@@ -71,6 +77,8 @@ class IKAccuracyVerifier:
         return best_joints
 
     def compute_error(self, ik_stamp, ik_solved_joints):
+        """计算角度误差并给出是否达标的提示。"""
+
         original_joints = self._find_matching_original(ik_stamp)
         if original_joints is None:
             rospy.logwarn_throttle(1.0, "[监测] 等待匹配的关节数据...")

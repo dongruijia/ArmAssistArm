@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""生成稳定性测试直线轨迹并驱动机械臂执行。"""
 
 import numpy as np
 import rospy
@@ -18,6 +19,8 @@ JOINT_NAMES = [
 
 
 class UR5RehabStabilityLineController:
+    """生成固定直线参考轨迹，并同步请求 IK 后下发执行。"""
+
     def __init__(self):
         rospy.init_node("ur5_rehab_stability_line_controller")
 
@@ -104,11 +107,15 @@ class UR5RehabStabilityLineController:
         return times, scalars
 
     def build_line_trajectory(self):
+        """根据五次时间缩放生成笛卡尔直线轨迹。"""
+
         times, scalars = self.quintic_scalars(self.duration)
         points = self.start_point[None, :] + scalars[:, None] * (self.end_point - self.start_point)[None, :]
         return times, points
 
     def request_ik_solution(self, point, orientation):
+        """发布单个目标位姿并等待对应时间戳的 IK 返回。"""
+
         pose = PoseStamped()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "base_link"
@@ -120,6 +127,7 @@ class UR5RehabStabilityLineController:
         pose.pose.orientation.z = float(orientation[2])
         pose.pose.orientation.w = float(orientation[3])
 
+        # 注意：这里依赖时间戳一一对应，请保持 IK 节点透传消息时间戳。
         expected_stamp = pose.header.stamp
         self.target_pub.publish(pose)
 
@@ -149,6 +157,8 @@ class UR5RehabStabilityLineController:
         return joint_points
 
     def publish_reference_in_real_time(self, exec_start, times, cart_points):
+        """按计划执行时刻实时发布参考位姿，供误差监测节点对齐。"""
+
         for time_sec, point in zip(times, cart_points):
             target_stamp = exec_start + rospy.Duration.from_sec(float(time_sec))
 

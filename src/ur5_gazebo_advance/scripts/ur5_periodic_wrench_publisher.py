@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""发布周期性外力信号，用于导纳控制测试。"""
 
 import math
 
@@ -7,6 +8,8 @@ from geometry_msgs.msg import WrenchStamped
 
 
 class PeriodicWrenchPublisher:
+    """生成正弦形式的力或力矩激励信号。"""
+
     def __init__(self):
         rospy.init_node("ur5_periodic_wrench_publisher")
 
@@ -37,6 +40,8 @@ class PeriodicWrenchPublisher:
 
     @staticmethod
     def _set_axis(vec, axis, value):
+        """按轴名称将标量写入三维向量。"""
+
         if axis == "x":
             vec[0] = value
         elif axis == "y":
@@ -45,6 +50,8 @@ class PeriodicWrenchPublisher:
             vec[2] = value
 
     def run(self):
+        """按设定频率持续发布周期性扳手信号。"""
+
         rate = rospy.Rate(self.rate_hz)
         t0 = rospy.Time.now().to_sec()
 

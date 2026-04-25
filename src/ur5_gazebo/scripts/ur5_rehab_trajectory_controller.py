@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""生成康复训练轨迹，并通过 IK 结果下发关节轨迹。"""
 
 import numpy as np
 import rospy
@@ -19,6 +20,8 @@ JOINT_NAMES = [
 
 
 class UR5RehabTrajectoryController:
+    """生成多段康复轨迹，并将笛卡尔轨迹转换为关节轨迹执行。"""
+
     def __init__(self):
         rospy.init_node("ur5_rehab_trajectory_controller")
 
@@ -37,6 +40,7 @@ class UR5RehabTrajectoryController:
         self.latest_ik_solution = None
         self.latest_ik_stamp = rospy.Time(0)
 
+        # 发布目标位姿触发 IK，并将求解后的关节轨迹发送给控制器。
         self.command_pub = rospy.Publisher(self.command_topic, JointTrajectory, queue_size=1)
         self.target_pub = rospy.Publisher(self.target_topic, PoseStamped, queue_size=1)
         self.joint_sub = rospy.Subscriber("/joint_states", JointState, self.joint_state_cb)
@@ -84,6 +88,8 @@ class UR5RehabTrajectoryController:
             rate.sleep()
 
     def resolve_orientation(self):
+        """优先使用参数给定姿态，否则沿用当前末端姿态。"""
+
         orientation_quat = rospy.get_param("~orientation_quat", [])
         if len(orientation_quat) == 4:
             quat = np.array(orientation_quat, dtype=float)
@@ -122,6 +128,8 @@ class UR5RehabTrajectoryController:
         return T
 
     def quintic_scalars(self, total_time):
+        """生成五次多项式时间缩放，保证起止速度和加速度平滑。"""
+
         point_count = int(round(total_time / self.dt))
         times = np.linspace(0.0, total_time, point_count + 1)
         tau = np.clip(times / total_time, 0.0, 1.0)
@@ -160,6 +168,8 @@ class UR5RehabTrajectoryController:
         return "trajectory_3_circle", times, points
 
     def selected_trajectories(self):
+        """根据参数选择单条或全部预设轨迹。"""
+
         builders = {
             "1": self.build_line_trajectory,
             "2": self.build_arc_trajectory,
@@ -179,6 +189,8 @@ class UR5RehabTrajectoryController:
         return [builders[self.run_mode]()]
 
     def request_ik_solution(self, point, orientation):
+        """为单个笛卡尔点请求对应的关节解。"""
+
         pose = PoseStamped()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "base_link"
@@ -191,6 +203,7 @@ class UR5RehabTrajectoryController:
         pose.pose.orientation.w = float(orientation[3])
 
         expected_stamp = pose.header.stamp
+        # 通过时间戳匹配本次目标位姿对应的 IK 结果。
         self.target_pub.publish(pose)
 
         deadline = rospy.Time.now() + rospy.Duration.from_sec(self.ik_timeout)
@@ -204,6 +217,8 @@ class UR5RehabTrajectoryController:
             rate.sleep()
 
     def solve_joint_trajectory(self, name, times, cart_points, orientation):
+        """逐点调用 IK，将笛卡尔轨迹离散成关节轨迹。"""
+
         joint_points = []
 
         for index, (time_sec, point) in enumerate(zip(times, cart_points)):
@@ -225,6 +240,8 @@ class UR5RehabTrajectoryController:
         return joint_points
 
     def publish_trajectory(self, name, joint_points):
+        """发布整条关节轨迹，并等待其基本执行完成。"""
+
         trajectory = JointTrajectory()
         trajectory.joint_names = JOINT_NAMES
         trajectory.header.stamp = rospy.Time.now() + rospy.Duration.from_sec(self.start_delay)
@@ -236,6 +253,8 @@ class UR5RehabTrajectoryController:
         rospy.sleep(self.start_delay + total_time + self.pause_between)
 
     def run_once(self):
+        """完成一次轨迹求解与执行流程。"""
+
         self.wait_for_joint_state()
         self.wait_for_controller_connection()
         self.wait_for_ik_connection()

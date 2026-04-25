@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""监测康复轨迹的参考位姿与实际位姿跟踪误差。"""
 
 from collections import deque
 
@@ -10,6 +11,8 @@ from sensor_msgs.msg import JointState
 
 
 class UR5RehabTrackingErrorMonitor:
+    """缓存参考轨迹并评估末端实际轨迹的跟踪误差。"""
+
     def __init__(self):
         rospy.init_node("ur5_rehab_tracking_error_monitor")
 
@@ -77,6 +80,8 @@ class UR5RehabTrackingErrorMonitor:
             self.first_ref_point = point.copy()
 
     def should_start_evaluation(self, stamp, actual_pos):
+        """满足抬臂和延时条件后再开始统计，避开起始扰动。"""
+
         if self.first_ref_point is None:
             return False
 
@@ -101,6 +106,8 @@ class UR5RehabTrackingErrorMonitor:
         return T
 
     def pop_matching_reference(self, stamp):
+        """按时间戳从缓存中取最接近的参考点。"""
+
         if not self.reference_buffer:
             return None
 
@@ -118,6 +125,7 @@ class UR5RehabTrackingErrorMonitor:
         if best_dt is None or best_dt > self.match_tolerance:
             return None
 
+        # 注意：匹配成功后顺带清掉更早的参考点，避免重复配对。
         while len(self.reference_buffer) > best_idx + 1:
             self.reference_buffer.popleft()
         self.reference_buffer.popleft()
@@ -142,6 +150,8 @@ class UR5RehabTrackingErrorMonitor:
         self.actual_pose_pub.publish(pose_msg)
 
     def maybe_report_final(self):
+        """样本足够或参考流结束后输出最终统计结果。"""
+
         if not self.eval_started:
             return
 
