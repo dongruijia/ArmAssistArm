@@ -123,13 +123,13 @@ source ~/.bashrc
 
 ## 4. 如何运行：三种康复轨迹
 
-## 4.1 一次跑完三种轨迹
+## 4.1 一次运行完三种轨迹
 
 ```bash
 roslaunch ur5_gazebo ur5_gazebo.launch trajectory_mode:=all loop:=false
 ```
 
-## 4.2 只跑某一种轨迹
+## 4.2 只运行某一种轨迹
 
 ```bash
 # 直线轨迹
@@ -241,32 +241,239 @@ roslaunch ur5_gazebo ur5_ft_wrench_corrector.launch
 
 ---
 
-## 7. 关键话题链路速览
+## 7. 主动康复模式新增内容（Mode1 / Mode2）
 
-## 7.1 康复轨迹链路
+这一部分对应 `src/ur5_gazebo_advance` 中新增的主动康复控制链路，目标是补充两种模式：
+
+- `mode1`：无预设轨迹，参考位姿取当前末端位姿，用户通过外力推动末端，观察导纳顺应效果
+- `mode2`：有预设圆轨迹参考，机械臂沿名义轨迹运动，同时允许导纳偏移，便于观察“轨迹 + 顺应”的组合效果
+
+## 7.1 新增/修改文件概览
+
+本次与主动康复直接相关的新增或修改如下：
+
+- 新增脚本：
+  - `src/ur5_gazebo_advance/scripts/ur5_active_rehab_admittance_controller.py`
+  - `src/ur5_gazebo_advance/scripts/ur5_circular_reference_generator.py`
+  - `src/ur5_gazebo_advance/scripts/ur5_delayed_tare_trigger.py`
+- 新增 launch：
+  - `src/ur5_gazebo_advance/launch/ur5_active_rehab_common.launch`
+  - `src/ur5_gazebo_advance/launch/ur5_active_rehab_mode1.launch`
+  - `src/ur5_gazebo_advance/launch/ur5_active_rehab_mode2.launch`
+- 新增参数文件：
+  - `src/ur5_gazebo_advance/config/mode1_params.yaml`
+  - `src/ur5_gazebo_advance/config/mode2_controller_params.yaml`
+  - `src/ur5_gazebo_advance/config/mode2_trajectory.yaml`
+- 修改上游 bringup：
+  - `src/universal_robot/ur_gazebo/launch/ur5_bringup.launch`
+
+`ur5_bringup.launch` 的修改只有一项核心作用：新增 `gazebo_world` 参数并继续向下传递。这样上层的主动康复 launch 就能决定 Gazebo 启动时加载哪个 world，而不必硬编码在官方 bringup 内部。
+
+## 7.2 新增 Python 脚本说明
+
+1. `ur5_active_rehab_admittance_controller.py`
+
+- 功能：主动康复主控制器，统一支持 `mode1` 和 `mode2`
+- 输入：
+  - `/joint_states`
+  - `/ur5/ft_sensor/wrench_corrected`
+  - `/ur5/end_effector_pose`
+  - `mode2` 下还会订阅 `/ur5/active_rehab/trajectory_reference`
+- 输出：
+  - `/ur5_arm_controller/command`
+  - `/ur5/active_rehab/reference_pose`
+  - `/ur5/active_rehab/nominal_reference_pose`
+- 主要实现：
+  - 在笛卡尔空间做三维导纳积分
+  - 用数值 IK 把参考末端位姿转成 6 关节轨迹点
+  - `mode1` 首次收到末端位姿后，将该位姿作为初始参考位姿
+  - `mode2` 将轨迹生成器给出的圆轨迹作为名义参考，再叠加导纳偏移
+
+2. `ur5_circular_reference_generator.py`
+
+- 功能：为 `mode2` 按固定频率发布圆轨迹参考位姿
+- 输入参数：圆心、半径、持续时间、平面、姿态四元数
+- 输出：`/ur5/active_rehab/trajectory_reference`
+- 主要实现：
+  - 根据 `mode2_trajectory.yaml` 的配置生成 `xy`、`yz` 或 `xz` 平面圆轨迹
+  - 支持 `loop`，默认循环发布，便于持续观察轨迹跟踪效果
+
+3. `ur5_delayed_tare_trigger.py`
+
+- 功能：启动后延时触发 FT 传感器去皮（tare）
+- 默认行为：等待 `3.0s` 后，向 `/ur5/ft_sensor/tare` 连续发布 2 次 `std_msgs/Empty`
+- 设计原因：
+  - Gazebo、控制器、重力项和传感器链路在启动的前几秒通常还未稳定
+  - 若过早采集零点，容易把启动瞬态误当成外力偏置
+  - 延时 tare 能让 `/ur5/ft_sensor/wrench_corrected` 更接近真正的零力状态
+
+## 7.3 新增 Launch 文件说明
+
+1. `ur5_active_rehab_common.launch`
+
+- 功能：主动康复模式的公共启动骨架
+- 负责统一拉起以下共用链路：
+  - UR5 Gazebo bringup
+  - FT wrench corrector
+  - delayed tare
+  - forward kinematics
+  - 可选 external wrench applier
+  - 可选 periodic wrench publisher
+- 设计目的：把 `mode1` 和 `mode2` 共用的底层启动步骤集中到一个文件，避免重复维护两套相同的启动逻辑
+
+2. `ur5_active_rehab_mode1.launch`
+
+- 功能：启动主动康复 `mode1`
+- 当前默认行为：
+  - 启动 `ur5_active_rehab_common.launch`
+  - 启动 `ur5_active_rehab_admittance_controller.py`
+  - 默认启用 `start_external_wrench_applier:=true`
+  - 默认 world 为 `worlds/empty.world`
+- 适用场景：通过 `rostopic pub` 向 `/ur5/ft_sensor/command_wrench` 发外力命令，观察末端顺应
+
+3. `ur5_active_rehab_mode2.launch`
+
+- 功能：启动主动康复 `mode2`
+- 当前默认行为：
+  - 启动 `ur5_active_rehab_common.launch`
+  - 启动 `ur5_circular_reference_generator.py`
+  - 启动 `ur5_active_rehab_admittance_controller.py`
+  - 启动 `ur5_rehab_tracking_error_monitor.py`
+- 适用场景：运行圆轨迹主动康复演示，并同时评估名义参考轨迹与实际末端轨迹误差
+
+## 7.4 参数文件说明
+
+1. `mode1_params.yaml`
+
+- 当前参数：`Md=diag(1,1,1)`、`Bd=diag(10,10,10)`、`Kd=diag(20,20,20)`
+- 作用：控制 `mode1` 的导纳刚柔程度和位移修正范围
+- 当前还设置了：
+  - `force_deadband: 0.0`
+  - `max_correction: [0.10, 0.10, 0.10]`
+
+2. `mode2_controller_params.yaml`
+
+- 当前参数：`Md=diag(1,1,1)`、`Bd=diag(50,50,50)`、`Kd=diag(200,200,200)`
+- 作用：使 `mode2` 在跟踪预设圆轨迹时回位更强、阻尼更大
+
+3. `mode2_trajectory.yaml`
+
+- 当前默认轨迹：
+  - 平面：`yz`
+  - 圆心：`[0.0, 0.5, 0.5]`
+  - 半径：`0.1`
+  - 周期：`8.0s`
+  - 循环：`true`
+
+## 7.5 使用说明：主动康复 Mode1
+
+启动方式：
+
+```bash
+roslaunch ur5_gazebo_advance ur5_active_rehab_mode1.launch
+```
+
+该命令默认会自动启动：
+
+- UR5 Gazebo 仿真
+- wrench corrector
+- delayed tare
+- forward kinematics
+- external wrench applier
+- `mode1` 导纳控制器
+
+如果要通过 `pub` 的方式施加外力，可向 `/ur5/ft_sensor/command_wrench` 发布 `geometry_msgs/WrenchStamped`。
+
+示例 1：沿世界坐标系 `+x` 方向持续施加 8N 外力
+
+```bash
+rostopic pub -r 50 /ur5/ft_sensor/command_wrench geometry_msgs/WrenchStamped \
+'{header: {frame_id: "world"}, wrench: {force: {x: 8.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}}'
+```
+
+示例 2：沿世界坐标系 `+z` 方向持续施加 8N 外力
+
+```bash
+rostopic pub -r 50 /ur5/ft_sensor/command_wrench geometry_msgs/WrenchStamped \
+'{header: {frame_id: "world"}, wrench: {force: {x: 0.0, y: 0.0, z: 8.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}}'
+```
+
+停止施力的方法：
+
+- 直接 `Ctrl-C` 停止 `rostopic pub`，外力注入节点会在超时后自动清零
+- 或手动发一条零力消息：
+
+```bash
+rostopic pub -1 /ur5/ft_sensor/command_wrench geometry_msgs/WrenchStamped \
+'{header: {frame_id: "world"}, wrench: {force: {x: 0.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}}'
+```
+
+## 7.6 使用说明：主动康复 Mode2
+
+启动方式：
+
+```bash
+roslaunch ur5_gazebo_advance ur5_active_rehab_mode2.launch
+```
+
+默认行为：
+
+- 先完成 Gazebo、FK、wrench corrector、delayed tare 等公共链路启动
+- 圆轨迹参考生成器持续发布圆轨迹位姿
+- 导纳控制器跟踪名义圆轨迹，并根据修正后的外力做顺应偏移
+- 误差监视器输出轨迹执行误差，便于验收 `mode2`
+
+常见可调参数示例：
+
+```bash
+roslaunch ur5_gazebo_advance ur5_active_rehab_mode2.launch \
+  start_error_monitor:=true
+```
+
+如果要修改圆轨迹尺寸或平面，直接调整 `src/ur5_gazebo_advance/config/mode2_trajectory.yaml` 中的 `center`、`radius`、`plane`、`duration` 即可。
+
+## 7.7 相关改动说明
+
+除了新增脚本和 launch，本次主动康复链路还依赖以下结构性调整：
+
+- `src/universal_robot/ur_gazebo/launch/ur5_bringup.launch`
+  - 新增 `gazebo_world` 参数
+  - 允许上层 launch 决定 Gazebo 加载的 world
+- `src/ur5_gazebo_advance/config/*.yaml`
+  - 把 `mode1` 与 `mode2` 的导纳参数、轨迹参数独立出来，便于单独调参
+- `src/ur5_gazebo/launch/ur5_external_wrench_applier.launch`
+  - 在 `mode1` 下作为 `pub` 施力链路的下游执行器使用
+
+---
+
+## 8. 关键话题链路速览
+
+## 8.1 康复轨迹链路
 
 - 目标笛卡尔位姿：`/ur5/rehab_target_pose` 或 `/ur5/stability_target_pose`
 - IK 结果关节角：`/ur5/rehab_ik_solved_joints` 或 `/ur5/stability_ik_solved_joints`
 - 控制命令：`/ur5_arm_controller/command`
 - 实际关节状态：`/joint_states`
 
-## 7.2 稳定性误差评估链路
+## 8.2 稳定性误差评估链路
 
 - 参考位姿：`/ur5/stability_reference_pose`
 - FK 实际位姿：`/ur5/stability_actual_pose`
 - 误差结果：终端日志输出平均/最大误差
 
-## 7.3 导纳控制链路
+## 8.3 导纳控制链路
 
 - 原始力：`/ur5/ft_sensor/wrench`
 - 修正力：`/ur5/ft_sensor/wrench_corrected`
 - 外力命令：`/ur5/ft_sensor/command_wrench`
-- 导纳参考位姿：`/ur5/admittance/reference_pose`
+- 主动康复参考位姿：`/ur5/active_rehab/reference_pose`
+- 名义参考位姿：`/ur5/active_rehab/nominal_reference_pose`
+- `mode2` 轨迹参考：`/ur5/active_rehab/trajectory_reference`
 - 关节命令：`/ur5_arm_controller/command`
 
 ---
 
-## 8. 常见问题与排查
+## 9. 常见问题与排查
 
 1. 启动后机械臂不动
 - 检查是否已 `source devel/setup.bash`
@@ -294,20 +501,26 @@ roslaunch ur5_gazebo ur5_ft_wrench_corrector.launch
 
 ---
 
-## 9. 推荐最小复现实验顺序
+## 10. 推荐最小复现实验顺序
 
 1. 编译并 source
-2. 跑三轨迹：
+2. 运行三轨迹：
    ```bash
    roslaunch ur5_gazebo ur5_gazebo.launch trajectory_mode:=all
    ```
-3. 跑稳定性验证：
+3. 运行稳定性验证：
    ```bash
    roslaunch ur5_gazebo ur5_rehab_stability_validation.launch
    ```
-4. 跑导纳控制：
+4. 运行导纳控制：
    ```bash
    roslaunch ur5_gazebo_advance ur5_admittance_control.launch
    ```
-
-
+5. 运行主动康复 `mode1`：
+   ```bash
+   roslaunch ur5_gazebo_advance ur5_active_rehab_mode1.launch
+   ```
+6. 运行主动康复 `mode2`：
+   ```bash
+   roslaunch ur5_gazebo_advance ur5_active_rehab_mode2.launch
+   ```

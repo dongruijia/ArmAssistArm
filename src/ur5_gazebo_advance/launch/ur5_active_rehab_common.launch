@@ -1,0 +1,83 @@
+<launch>
+  <arg name="start_robot_bringup" default="true"/>
+  <arg name="gazebo_gui" default="true"/>
+  <arg name="gazebo_world" default="worlds/empty.world"/>
+
+  <arg name="start_wrench_corrector" default="true"/>
+  <arg name="start_delayed_tare" default="true"/>
+  <arg name="start_external_wrench_applier" default="false"/>
+  <arg name="start_periodic_wrench" default="false"/>
+  <arg name="start_fk" default="true"/>
+
+  <arg name="tare_sample_count" default="300"/>
+  <arg name="tare_delay_sec" default="3.0"/>
+  <arg name="apply_rate_hz" default="100.0"/>
+  <arg name="command_timeout" default="0.3"/>
+
+  <arg name="wrench_axis" default="x"/>
+  <arg name="wrench_amplitude" default="5.0"/>
+  <arg name="wrench_frequency" default="0.5"/>
+
+  <group if="$(arg start_robot_bringup)">
+    <include file="$(find ur_gazebo)/launch/ur5_bringup.launch">
+      <arg name="gazebo_world" value="$(arg gazebo_world)"/>
+      <arg name="paused" value="false"/>
+      <arg name="gui" value="$(arg gazebo_gui)"/>
+      <arg name="transmission_hw_interface" value="hardware_interface/PositionJointInterface"/>
+      <arg name="controller_config_file" value="$(find ur5_gazebo)/config/ur5_controllers.yaml"/>
+      <arg name="controllers" value="joint_state_controller ur5_arm_controller"/>
+      <arg name="stopped_controllers" value="joint_group_pos_controller"/>
+    </include>
+  </group>
+
+  <group if="$(arg start_wrench_corrector)">
+    <include file="$(find ur5_gazebo)/launch/ur5_ft_wrench_corrector.launch">
+      <arg name="raw_topic" value="/ur5/ft_sensor/wrench"/>
+      <arg name="corrected_topic" value="/ur5/ft_sensor/wrench_corrected"/>
+      <arg name="tare_topic" value="/ur5/ft_sensor/tare"/>
+      <arg name="use_initial_tare" value="false"/>
+      <arg name="tare_sample_count" value="$(arg tare_sample_count)"/>
+      <arg name="require_tare_before_publish" value="true"/>
+    </include>
+  </group>
+
+  <node if="$(arg start_delayed_tare)"
+        pkg="ur5_gazebo_advance"
+        type="ur5_delayed_tare_trigger.py"
+        name="ur5_delayed_tare_trigger"
+        output="screen">
+    <param name="topic" value="/ur5/ft_sensor/tare"/>
+    <param name="delay_sec" value="$(arg tare_delay_sec)"/>
+    <param name="repeat_count" value="2"/>
+    <param name="repeat_interval" value="0.2"/>
+  </node>
+
+  <node if="$(arg start_fk)"
+        pkg="ur5_gazebo"
+        type="ur5_forward_kinematics.py"
+        name="ur5_forward_kinematics"
+        output="screen"/>
+
+  <group if="$(arg start_external_wrench_applier)">
+    <include file="$(find ur5_gazebo)/launch/ur5_external_wrench_applier.launch">
+      <arg name="body_name" value="robot::wrist_3_link"/>
+      <arg name="command_topic" value="/ur5/ft_sensor/command_wrench"/>
+      <arg name="reference_frame" value="world"/>
+      <arg name="apply_rate_hz" value="$(arg apply_rate_hz)"/>
+      <arg name="command_timeout" value="$(arg command_timeout)"/>
+    </include>
+  </group>
+
+  <node if="$(arg start_periodic_wrench)"
+        pkg="ur5_gazebo_advance"
+        type="ur5_periodic_wrench_publisher.py"
+        name="ur5_periodic_wrench_publisher"
+        output="screen">
+    <param name="topic" value="/ur5/ft_sensor/command_wrench"/>
+    <param name="frame_id" value="world"/>
+    <param name="rate_hz" value="100.0"/>
+    <param name="axis" value="$(arg wrench_axis)"/>
+    <param name="amplitude" value="$(arg wrench_amplitude)"/>
+    <param name="frequency" value="$(arg wrench_frequency)"/>
+  </node>
+</launch>

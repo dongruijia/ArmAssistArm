@@ -1,0 +1,26 @@
+<launch>
+  <arg name="gazebo_gui" default="true"/>
+  <arg name="gazebo_world" default="worlds/empty.world"/>
+  <arg name="start_external_wrench_applier" default="true"/>
+  <arg name="start_periodic_wrench" default="false"/>
+
+  <include file="$(find ur5_gazebo_advance)/launch/ur5_active_rehab_common.launch">
+    <arg name="gazebo_gui" value="$(arg gazebo_gui)"/>
+    <arg name="gazebo_world" value="$(arg gazebo_world)"/>
+    <arg name="start_external_wrench_applier" value="$(arg start_external_wrench_applier)"/>
+    <arg name="start_periodic_wrench" value="$(arg start_periodic_wrench)"/>
+  </include>
+
+  <node pkg="ur5_gazebo_advance"
+        type="ur5_active_rehab_admittance_controller.py"
+        name="ur5_active_rehab_mode1_controller"
+        output="screen">
+    <param name="control_mode" value="mode1"/>
+    <param name="wrench_topic" value="/ur5/ft_sensor/wrench_corrected"/>
+    <param name="ee_pose_topic" value="/ur5/end_effector_pose"/>
+    <param name="command_topic" value="/ur5_arm_controller/command"/>
+    <param name="reference_pose_topic" value="/ur5/active_rehab/reference_pose"/>
+    <param name="nominal_reference_topic" value="/ur5/active_rehab/nominal_reference_pose"/>
+    <rosparam command="load" file="$(find ur5_gazebo_advance)/config/mode1_params.yaml"/>
+  </node>
+</launch>

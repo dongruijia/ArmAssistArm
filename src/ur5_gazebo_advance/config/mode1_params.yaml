@@ -1,0 +1,17 @@
+control_rate_hz: 100.0
+command_horizon: 0.05
+force_lpf_cutoff_hz: 10.0
+force_deadband: 0.0
+trajectory_reference_timeout: 0.2
+Md_diag: [1.0, 1.0, 1.0]
+Bd_diag: [10.0, 10.0, 10.0]
+Kd_diag: [20.0, 20.0, 20.0]
+max_correction: [0.10, 0.10, 0.10]
+ik_position_only: true
+ik_max_iter: 120
+ik_tol_pos: 0.001
+ik_tol_ori: 0.005
+ik_step: 0.8
+ik_max_step_norm: 0.2
+ik_damping: 0.03
+ik_orientation_weight: 0.05

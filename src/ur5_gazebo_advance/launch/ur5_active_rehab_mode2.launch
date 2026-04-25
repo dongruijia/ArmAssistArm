@@ -1,0 +1,49 @@
+<launch>
+  <arg name="gazebo_gui" default="true"/>
+  <arg name="start_external_wrench_applier" default="false"/>
+  <arg name="start_periodic_wrench" default="false"/>
+  <arg name="start_error_monitor" default="true"/>
+
+  <include file="$(find ur5_gazebo_advance)/launch/ur5_active_rehab_common.launch">
+    <arg name="gazebo_gui" value="$(arg gazebo_gui)"/>
+    <arg name="start_external_wrench_applier" value="$(arg start_external_wrench_applier)"/>
+    <arg name="start_periodic_wrench" value="$(arg start_periodic_wrench)"/>
+  </include>
+
+  <node pkg="ur5_gazebo_advance"
+        type="ur5_circular_reference_generator.py"
+        name="ur5_circular_reference_generator"
+        output="screen">
+    <param name="topic" value="/ur5/active_rehab/trajectory_reference"/>
+    <rosparam command="load" file="$(find ur5_gazebo_advance)/config/mode2_trajectory.yaml"/>
+  </node>
+
+  <node pkg="ur5_gazebo_advance"
+        type="ur5_active_rehab_admittance_controller.py"
+        name="ur5_active_rehab_mode2_controller"
+        output="screen">
+    <param name="control_mode" value="mode2"/>
+    <param name="wrench_topic" value="/ur5/ft_sensor/wrench_corrected"/>
+    <param name="ee_pose_topic" value="/ur5/end_effector_pose"/>
+    <param name="trajectory_reference_topic" value="/ur5/active_rehab/trajectory_reference"/>
+    <param name="command_topic" value="/ur5_arm_controller/command"/>
+    <param name="reference_pose_topic" value="/ur5/active_rehab/reference_pose"/>
+    <param name="nominal_reference_topic" value="/ur5/active_rehab/nominal_reference_pose"/>
+    <rosparam command="load" file="$(find ur5_gazebo_advance)/config/mode2_controller_params.yaml"/>
+  </node>
+
+  <node if="$(arg start_error_monitor)"
+        pkg="ur5_gazebo"
+        type="ur5_rehab_tracking_error_monitor.py"
+        name="ur5_active_rehab_mode2_error_monitor"
+        output="screen">
+    <param name="reference_topic" value="/ur5/active_rehab/nominal_reference_pose"/>
+    <param name="joint_topic" value="/joint_states"/>
+    <param name="actual_pose_topic" value="/ur5/active_rehab/actual_pose"/>
+    <param name="sample_dt" value="0.01"/>
+    <param name="expected_duration" value="8.0"/>
+    <param name="match_tolerance" value="0.03"/>
+    <param name="eval_start_delay" value="0.5"/>
+    <param name="eval_start_min_z" value="0.30"/>
+  </node>
+</launch>
