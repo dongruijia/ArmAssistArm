@@ -12,6 +12,9 @@
 
   <arg name="control_rate_hz" default="100.0"/>
   <arg name="force_lpf_cutoff_hz" default="10.0"/>
+  <arg name="force_filter_type" default="lpf"/>
+  <arg name="kalman_process_var" default="[0.001, 0.001, 0.001]"/>
+  <arg name="kalman_measurement_var" default="[0.5, 0.5, 0.5]"/>
 
   <arg name="fixed_position" default="[0.45, 0.0, 0.55]"/>
   <arg name="fixed_orientation" default="[0.0, 0.0, 0.0, 1.0]"/>
@@ -62,6 +65,9 @@
         output="screen">
     <param name="control_rate_hz" value="$(arg control_rate_hz)"/>
     <param name="force_lpf_cutoff_hz" value="$(arg force_lpf_cutoff_hz)"/>
+    <param name="force_filter_type" value="$(arg force_filter_type)"/>
+    <rosparam param="kalman_process_var" subst_value="true">$(arg kalman_process_var)</rosparam>
+    <rosparam param="kalman_measurement_var" subst_value="true">$(arg kalman_measurement_var)</rosparam>
 
     <param name="wrench_topic" value="/ur5/ft_sensor/wrench_corrected"/>
     <param name="ee_pose_topic" value="/ur5/ee_pose"/>

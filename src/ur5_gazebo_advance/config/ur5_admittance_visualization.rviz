@@ -3,7 +3,10 @@ Panels:
     Help Height: 70
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
+      Expanded:
+        - /WrenchStamped1
+        - /WrenchStamped2
+        - /WrenchStamped3
       Splitter Ratio: 0.5
     Tree Height: 363
   - Class: rviz/Views
@@ -120,14 +123,14 @@ Visualization Manager:
       Arrow Width: 0.5
       Class: rviz/WrenchStamped
       Enabled: true
-      Force Arrow Scale: 2
+      Force Arrow Scale: 0.4000000059604645
       Force Color: 204; 51; 51
       Hide Small Values: true
       History Length: 1
       Name: WrenchStamped
       Queue Size: 10
       Topic: /ur5/ft_sensor/wrench_corrected
-      Torque Arrow Scale: 2
+      Torque Arrow Scale: 0.4000000059604645
       Torque Color: 204; 204; 51
       Unreliable: false
       Value: true
@@ -135,14 +138,14 @@ Visualization Manager:
       Arrow Width: 0.5
       Class: rviz/WrenchStamped
       Enabled: true
-      Force Arrow Scale: 2
+      Force Arrow Scale: 0.4000000059604645
       Force Color: 85; 255; 0
       Hide Small Values: true
       History Length: 1
       Name: WrenchStamped
       Queue Size: 10
       Topic: /ur5/ft_sensor/wrench
-      Torque Arrow Scale: 2
+      Torque Arrow Scale: 0.4000000059604645
       Torque Color: 204; 204; 51
       Unreliable: false
       Value: true
@@ -150,14 +153,14 @@ Visualization Manager:
       Arrow Width: 0.5
       Class: rviz/WrenchStamped
       Enabled: true
-      Force Arrow Scale: 2
+      Force Arrow Scale: 0.4000000059604645
       Force Color: 204; 51; 51
       Hide Small Values: true
       History Length: 1
       Name: WrenchStamped
       Queue Size: 10
       Topic: /ur5/ft_sensor/command_wrench
-      Torque Arrow Scale: 2
+      Torque Arrow Scale: 0.4000000059604645
       Torque Color: 204; 204; 51
       Unreliable: false
       Value: true
@@ -229,5 +232,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1400
-  X: 68
-  Y: 28
+  X: 36
+  Y: -4

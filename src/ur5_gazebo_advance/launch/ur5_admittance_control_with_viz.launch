@@ -1,0 +1,72 @@
+<launch>
+  <arg name="start_robot_bringup" default="true"/>
+  <arg name="gazebo_gui" default="true"/>
+
+  <arg name="start_wrench_corrector" default="true"/>
+  <arg name="start_external_wrench_applier" default="true"/>
+  <arg name="start_periodic_wrench" default="true"/>
+  <arg name="start_debug_visualizer" default="true"/>
+
+  <!-- 默认开启 RViz + 波形观测 -->
+  <arg name="start_rviz" default="true"/>
+  <arg name="start_rqt_plots" default="true"/>
+  <arg name="start_report_plotter" default="true"/>
+
+  <arg name="control_rate_hz" default="100.0"/>
+  <arg name="force_lpf_cutoff_hz" default="10.0"/>
+  <arg name="force_filter_type" default="lpf"/>
+  <arg name="kalman_process_var" default="[0.001, 0.001, 0.001]"/>
+  <arg name="kalman_measurement_var" default="[0.5, 0.5, 0.5]"/>
+
+  <arg name="fixed_position" default="[0.45, 0.0, 0.55]"/>
+  <arg name="fixed_orientation" default="[0.0, 0.0, 0.0, 1.0]"/>
+
+  <arg name="md_diag" default="[1.0, 1.0, 1.0]"/>
+  <arg name="bd_diag" default="[50.0, 50.0, 50.0]"/>
+  <arg name="kd_diag" default="[200.0, 200.0, 200.0]"/>
+
+  <arg name="wrench_axis" default="x"/>
+  <arg name="wrench_amplitude" default="10.0"/>
+  <arg name="wrench_frequency" default="0.5"/>
+  <arg name="path_max_points" default="500"/>
+  <arg name="report_output_dir" default="~/.ros/ur5_admittance_reports"/>
+
+  <include file="$(find ur5_gazebo_advance)/launch/ur5_admittance_control.launch">
+    <arg name="start_robot_bringup" value="$(arg start_robot_bringup)"/>
+    <arg name="gazebo_gui" value="$(arg gazebo_gui)"/>
+
+    <arg name="start_wrench_corrector" value="$(arg start_wrench_corrector)"/>
+    <arg name="start_external_wrench_applier" value="$(arg start_external_wrench_applier)"/>
+    <arg name="start_periodic_wrench" value="$(arg start_periodic_wrench)"/>
+    <arg name="start_debug_visualizer" value="$(arg start_debug_visualizer)"/>
+    <arg name="start_rviz" value="$(arg start_rviz)"/>
+    <arg name="start_rqt_plots" value="$(arg start_rqt_plots)"/>
+    <arg name="start_report_plotter" value="$(arg start_report_plotter)"/>
+
+    <arg name="control_rate_hz" value="$(arg control_rate_hz)"/>
+    <arg name="force_lpf_cutoff_hz" value="$(arg force_lpf_cutoff_hz)"/>
+    <arg name="force_filter_type" value="$(arg force_filter_type)"/>
+    <arg name="kalman_process_var" value="$(arg kalman_process_var)"/>
+    <arg name="kalman_measurement_var" value="$(arg kalman_measurement_var)"/>
+
+    <arg name="fixed_position" value="$(arg fixed_position)"/>
+    <arg name="fixed_orientation" value="$(arg fixed_orientation)"/>
+
+    <arg name="md_diag" value="$(arg md_diag)"/>
+    <arg name="bd_diag" value="$(arg bd_diag)"/>
+    <arg name="kd_diag" value="$(arg kd_diag)"/>
+
+    <arg name="wrench_axis" value="$(arg wrench_axis)"/>
+    <arg name="wrench_amplitude" value="$(arg wrench_amplitude)"/>
+    <arg name="wrench_frequency" value="$(arg wrench_frequency)"/>
+    <arg name="path_max_points" value="$(arg path_max_points)"/>
+    <arg name="report_output_dir" value="$(arg report_output_dir)"/>
+  </include>
+
+  <node if="$(arg start_rqt_plots)"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        name="ur5_admittance_filtered_wrench_plot"
+        args="/ur5/admittance/filtered_wrench/wrench/force/x /ur5/admittance/filtered_wrench/wrench/force/y /ur5/admittance/filtered_wrench/wrench/force/z"
+        output="screen"/>
+</launch>

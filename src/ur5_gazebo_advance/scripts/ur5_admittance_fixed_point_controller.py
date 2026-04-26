@@ -148,6 +148,16 @@ class UR5NumericIK:
 class UR5AdmittanceFixedPointController:
     """根据测得外力在线修正固定点附近的末端参考位姿。"""
 
+    @staticmethod
+    def _param_vec3(name, default):
+        value = rospy.get_param(name, default)
+        if isinstance(value, (int, float)):
+            return np.array([float(value), float(value), float(value)], dtype=float)
+        arr = np.array(value, dtype=float).reshape(-1)
+        if arr.size != 3:
+            raise ValueError(f"{name} must be a scalar or a 3-element array")
+        return arr
+
     def __init__(self):
         rospy.init_node("ur5_admittance_fixed_point_controller")
 
@@ -157,6 +167,9 @@ class UR5AdmittanceFixedPointController:
         self.wrench_topic = rospy.get_param("~wrench_topic", "/ur5/ft_sensor/wrench_corrected")
         self.ee_pose_topic = rospy.get_param("~ee_pose_topic", "/ur5/ee_pose")
         self.reference_pose_topic = rospy.get_param("~reference_pose_topic", "/ur5/admittance/reference_pose")
+        self.filtered_wrench_topic = rospy.get_param(
+            "~filtered_wrench_topic", "/ur5/admittance/filtered_wrench"
+        )
 
         self.fixed_position = np.array(rospy.get_param("~fixed_position", [0.45, 0.0, 0.55]), dtype=float)
         self.fixed_orientation = np.array(
@@ -166,6 +179,12 @@ class UR5AdmittanceFixedPointController:
 
         self.max_correction = np.array(rospy.get_param("~max_correction", [0.1, 0.1, 0.1]), dtype=float)
         self.force_deadband = float(rospy.get_param("~force_deadband", 0.0))
+        self.force_filter_type = str(rospy.get_param("~force_filter_type", "lpf")).strip().lower()
+        if self.force_filter_type not in ("lpf", "kalman"):
+            rospy.logwarn(
+                "Unknown force_filter_type=%s, fallback to lpf", self.force_filter_type
+            )
+            self.force_filter_type = "lpf"
 
         self.Md = np.array(rospy.get_param("~Md_diag", [1.0, 1.0, 1.0]), dtype=float)
         self.Bd = np.array(rospy.get_param("~Bd_diag", [50.0, 50.0, 50.0]), dtype=float)
@@ -173,6 +192,8 @@ class UR5AdmittanceFixedPointController:
 
         self.force_lpf_cutoff_hz = float(rospy.get_param("~force_lpf_cutoff_hz", 10.0))
         self.alpha = np.exp(-2.0 * np.pi * self.force_lpf_cutoff_hz / self.control_rate_hz)
+        self.kalman_process_var = self._param_vec3("~kalman_process_var", [1e-3, 1e-3, 1e-3])
+        self.kalman_measurement_var = self._param_vec3("~kalman_measurement_var", [5e-1, 5e-1, 5e-1])
 
         q_norm = np.linalg.norm(self.fixed_orientation)
         if q_norm < 1e-12:
@@ -190,12 +211,18 @@ class UR5AdmittanceFixedPointController:
         self.filtered_force = np.zeros(3)
         self.delta_x = np.zeros(3)
         self.delta_v = np.zeros(3)
+        self.last_wrench_frame_id = "base_link"
+        self.kalman_x = np.zeros(3)
+        self.kalman_P = np.ones(3)
 
         self.ik_solver = UR5NumericIK()
 
         # 订阅力和位姿反馈，输出经导纳修正后的关节轨迹与参考位姿。
         self.command_pub = rospy.Publisher(self.command_topic, JointTrajectory, queue_size=1)
         self.reference_pose_pub = rospy.Publisher(self.reference_pose_topic, PoseStamped, queue_size=10)
+        self.filtered_wrench_pub = rospy.Publisher(
+            self.filtered_wrench_topic, WrenchStamped, queue_size=10
+        )
 
         self.joint_sub = rospy.Subscriber("/joint_states", JointState, self.joint_state_cb, queue_size=50)
         self.wrench_sub = rospy.Subscriber(self.wrench_topic, WrenchStamped, self.wrench_cb, queue_size=50)
@@ -206,6 +233,11 @@ class UR5AdmittanceFixedPointController:
         rospy.loginfo("  wrench_topic: %s", self.wrench_topic)
         rospy.loginfo("  ee_pose_topic: %s", self.ee_pose_topic)
         rospy.loginfo("  command_topic: %s", self.command_topic)
+        rospy.loginfo("  filtered_wrench_topic: %s", self.filtered_wrench_topic)
+        rospy.loginfo("  force_filter_type: %s", self.force_filter_type)
+        rospy.loginfo("  force_lpf_cutoff_hz: %.3f", self.force_lpf_cutoff_hz)
+        rospy.loginfo("  kalman_process_var: %s", self.kalman_process_var.tolist())
+        rospy.loginfo("  kalman_measurement_var: %s", self.kalman_measurement_var.tolist())
         rospy.loginfo("  Md: %s", self.Md.tolist())
         rospy.loginfo("  Bd: %s", self.Bd.tolist())
         rospy.loginfo("  Kd: %s", self.Kd.tolist())
@@ -249,10 +281,24 @@ class UR5AdmittanceFixedPointController:
         self.raw_force = np.array(
             [msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z], dtype=float
         )
+        if msg.header.frame_id:
+            self.last_wrench_frame_id = msg.header.frame_id
+
+    def _kalman_update(self, measurement):
+        """三轴独立的一阶离散卡尔曼更新。"""
+
+        P_pred = self.kalman_P + self.kalman_process_var
+        K = P_pred / (P_pred + self.kalman_measurement_var)
+        self.kalman_x = self.kalman_x + K * (measurement - self.kalman_x)
+        self.kalman_P = (1.0 - K) * P_pred
+        return self.kalman_x.copy()
 
     def _update_admittance(self, dt):
         # 以质量-阻尼-刚度模型积分得到末端位置修正量。
-        self.filtered_force = self.alpha * self.filtered_force + (1.0 - self.alpha) * self.raw_force
+        if self.force_filter_type == "kalman":
+            self.filtered_force = self._kalman_update(self.raw_force)
+        else:
+            self.filtered_force = self.alpha * self.filtered_force + (1.0 - self.alpha) * self.raw_force
 
         if self.force_deadband > 0.0:
             mask = np.abs(self.filtered_force) < self.force_deadband
@@ -277,6 +323,20 @@ class UR5AdmittanceFixedPointController:
         pose.pose.orientation.z = float(self.fixed_orientation[2])
         pose.pose.orientation.w = float(self.fixed_orientation[3])
         self.reference_pose_pub.publish(pose)
+
+    def _publish_filtered_wrench(self):
+        """发布一阶低通后的外力，便于监控滤波效果。"""
+
+        msg = WrenchStamped()
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = self.last_wrench_frame_id
+        msg.wrench.force.x = float(self.filtered_force[0])
+        msg.wrench.force.y = float(self.filtered_force[1])
+        msg.wrench.force.z = float(self.filtered_force[2])
+        msg.wrench.torque.x = 0.0
+        msg.wrench.torque.y = 0.0
+        msg.wrench.torque.z = 0.0
+        self.filtered_wrench_pub.publish(msg)
 
     def _publish_joint_command(self, q_cmd):
         """将当前 IK 解打包成短时域关节指令。"""
@@ -308,6 +368,7 @@ class UR5AdmittanceFixedPointController:
 
         while not rospy.is_shutdown():
             self._update_admittance(dt)
+            self._publish_filtered_wrench()
 
             target_position = self.fixed_position + self.delta_x
             self._publish_reference_pose(target_position)
