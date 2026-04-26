@@ -3,12 +3,41 @@
   <arg name="gazebo_world" default="worlds/empty.world"/>
   <arg name="start_external_wrench_applier" default="true"/>
   <arg name="start_periodic_wrench" default="false"/>
+  <arg name="start_pulse_wrench" default="false"/>
+  <arg name="wrench_axis" default="x"/>
+  <arg name="wrench_frame_id" default="base_link"/>
+  <arg name="wrench_waveform" default="square"/>
+  <arg name="wrench_amplitude" default="1.0"/>
+  <arg name="wrench_frequency" default="0.5"/>
+  <arg name="wrench_periods_per_burst" default="2"/>
+  <arg name="wrench_start_delay" default="5.0"/>
+  <arg name="wrench_on_duration" default="2.0"/>
+  <arg name="wrench_off_duration" default="2.0"/>
+  <arg name="wrench_interval_duration" default="$(arg wrench_off_duration)"/>
+  <arg name="wrench_cycles" default="3"/>
+  <arg name="start_force_rviz" default="false"/>
+  <arg name="force_rviz_config" default="$(find ur5_gazebo_advance)/config/ur5_force_only_visualization.rviz"/>
+  <arg name="force_marker_wrench_topic" default="/ur5/ft_sensor/command_wrench"/>
+  <arg name="force_marker_frame" default="base_link"/>
+  <arg name="force_marker_anchor_frame" default="wrist_3_link"/>
 
   <include file="$(find ur5_gazebo_advance)/launch/ur5_active_rehab_common.launch">
     <arg name="gazebo_gui" value="$(arg gazebo_gui)"/>
     <arg name="gazebo_world" value="$(arg gazebo_world)"/>
     <arg name="start_external_wrench_applier" value="$(arg start_external_wrench_applier)"/>
     <arg name="start_periodic_wrench" value="$(arg start_periodic_wrench)"/>
+    <arg name="start_pulse_wrench" value="$(arg start_pulse_wrench)"/>
+    <arg name="wrench_axis" value="$(arg wrench_axis)"/>
+    <arg name="wrench_frame_id" value="$(arg wrench_frame_id)"/>
+    <arg name="wrench_waveform" value="$(arg wrench_waveform)"/>
+    <arg name="wrench_amplitude" value="$(arg wrench_amplitude)"/>
+    <arg name="wrench_frequency" value="$(arg wrench_frequency)"/>
+    <arg name="wrench_periods_per_burst" value="$(arg wrench_periods_per_burst)"/>
+    <arg name="wrench_start_delay" value="$(arg wrench_start_delay)"/>
+    <arg name="wrench_on_duration" value="$(arg wrench_on_duration)"/>
+    <arg name="wrench_off_duration" value="$(arg wrench_off_duration)"/>
+    <arg name="wrench_interval_duration" value="$(arg wrench_interval_duration)"/>
+    <arg name="wrench_cycles" value="$(arg wrench_cycles)"/>
   </include>
 
   <node pkg="ur5_gazebo_advance"
@@ -23,4 +52,23 @@
     <param name="nominal_reference_topic" value="/ur5/active_rehab/nominal_reference_pose"/>
     <rosparam command="load" file="$(find ur5_gazebo_advance)/config/mode1_params.yaml"/>
   </node>
+
+  <node if="$(arg start_force_rviz)"
+        pkg="ur5_gazebo_advance"
+        type="ur5_force_marker_publisher.py"
+        name="ur5_force_marker_publisher"
+        output="screen">
+    <param name="wrench_topic" value="$(arg force_marker_wrench_topic)"/>
+    <param name="marker_topic" value="/ur5/active_rehab/force_markers"/>
+    <param name="marker_frame_id" value="$(arg force_marker_frame)"/>
+    <param name="fallback_frame_id" value="world"/>
+    <param name="anchor_frame_id" value="$(arg force_marker_anchor_frame)"/>
+    <param name="publish_axes_without_wrench" value="true"/>
+  </node>
+
+  <node if="$(arg start_force_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="ur5_mode1_force_rviz"
+        args="-d $(arg force_rviz_config)"/>
 </launch>

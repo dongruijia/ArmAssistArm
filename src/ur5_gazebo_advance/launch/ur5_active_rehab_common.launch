@@ -7,6 +7,7 @@
   <arg name="start_delayed_tare" default="true"/>
   <arg name="start_external_wrench_applier" default="false"/>
   <arg name="start_periodic_wrench" default="false"/>
+  <arg name="start_pulse_wrench" default="false"/>
   <arg name="start_fk" default="true"/>
 
   <arg name="tare_sample_count" default="300"/>
@@ -15,8 +16,21 @@
   <arg name="command_timeout" default="0.3"/>
 
   <arg name="wrench_axis" default="x"/>
+  <arg name="wrench_frame_id" default="base_link"/>
+  <arg name="wrench_pattern" default="single_axis"/>
+  <arg name="wrench_waveform" default="square"/>
   <arg name="wrench_amplitude" default="5.0"/>
   <arg name="wrench_frequency" default="0.5"/>
+  <arg name="wrench_periods_per_burst" default="2"/>
+  <arg name="wrench_start_delay" default="2.0"/>
+  <arg name="wrench_on_duration" default="2.0"/>
+  <arg name="wrench_off_duration" default="2.0"/>
+  <arg name="wrench_interval_duration" default="$(arg wrench_off_duration)"/>
+  <arg name="wrench_cycles" default="3"/>
+  <arg name="wrench_trajectory_topic" default="/ur5/active_rehab/trajectory_reference"/>
+  <arg name="wrench_circle_center" default="[0.0, 0.5, 0.5]"/>
+  <arg name="wrench_circle_plane" default="yz"/>
+  <arg name="wrench_reference_timeout" default="0.5"/>
 
   <group if="$(arg start_robot_bringup)">
     <include file="$(find ur_gazebo)/launch/ur5_bringup.launch">
@@ -74,10 +88,36 @@
         name="ur5_periodic_wrench_publisher"
         output="screen">
     <param name="topic" value="/ur5/ft_sensor/command_wrench"/>
-    <param name="frame_id" value="world"/>
+    <param name="frame_id" value="$(arg wrench_frame_id)"/>
     <param name="rate_hz" value="100.0"/>
     <param name="axis" value="$(arg wrench_axis)"/>
     <param name="amplitude" value="$(arg wrench_amplitude)"/>
     <param name="frequency" value="$(arg wrench_frequency)"/>
+  </node>
+
+  <node if="$(arg start_pulse_wrench)"
+        pkg="ur5_gazebo_advance"
+        type="ur5_pulse_wrench_publisher.py"
+        name="ur5_pulse_wrench_publisher"
+        output="screen">
+    <param name="topic" value="/ur5/ft_sensor/command_wrench"/>
+    <param name="frame_id" value="$(arg wrench_frame_id)"/>
+    <param name="rate_hz" value="100.0"/>
+    <param name="axis" value="$(arg wrench_axis)"/>
+    <param name="pattern" value="$(arg wrench_pattern)"/>
+    <param name="waveform" value="$(arg wrench_waveform)"/>
+    <param name="amplitude" value="$(arg wrench_amplitude)"/>
+    <param name="frequency" value="$(arg wrench_frequency)"/>
+    <param name="periods_per_burst" value="$(arg wrench_periods_per_burst)"/>
+    <param name="start_delay" value="$(arg wrench_start_delay)"/>
+    <param name="on_duration" value="$(arg wrench_on_duration)"/>
+    <param name="off_duration" value="$(arg wrench_off_duration)"/>
+    <param name="interval_duration" value="$(arg wrench_interval_duration)"/>
+    <param name="cycles" value="$(arg wrench_cycles)"/>
+    <param name="trajectory_topic" value="$(arg wrench_trajectory_topic)"/>
+    <param name="circle_center" value="$(arg wrench_circle_center)"/>
+    <param name="circle_plane" value="$(arg wrench_circle_plane)"/>
+    <param name="reference_timeout" value="$(arg wrench_reference_timeout)"/>
+    <param name="publish_zero_at_end" value="true"/>
   </node>
 </launch>

@@ -3,6 +3,7 @@
 import numpy as np
 import rospy
 import tf.transformations as tf_t
+import tf2_ros
 from geometry_msgs.msg import PoseStamped, WrenchStamped
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -151,6 +152,11 @@ class UR5ActiveRehabAdmittanceController:
         self.control_rate_hz = float(rospy.get_param("~control_rate_hz", 100.0))
         self.command_horizon = float(rospy.get_param("~command_horizon", 0.05))
         self.reference_frame_id = rospy.get_param("~reference_frame_id", "base_link")
+        self.transform_wrench_to_reference_frame = bool(
+            rospy.get_param("~transform_wrench_to_reference_frame", False)
+        )
+        self.wrench_fallback_frame_id = rospy.get_param("~wrench_fallback_frame_id", "wrist_3_link")
+        self.wrench_tf_lookup_timeout_sec = float(rospy.get_param("~wrench_tf_lookup_timeout_sec", 0.02))
 
         self.command_topic = rospy.get_param("~command_topic", "/ur5_arm_controller/command")
         self.wrench_topic = rospy.get_param("~wrench_topic", "/ur5/ft_sensor/wrench_corrected")
@@ -173,6 +179,29 @@ class UR5ActiveRehabAdmittanceController:
         self.force_lpf_cutoff_hz = float(rospy.get_param("~force_lpf_cutoff_hz", 10.0))
         self.alpha = np.exp(-2.0 * np.pi * self.force_lpf_cutoff_hz / self.control_rate_hz)
 
+        self.mode1_safe_start_enabled = bool(rospy.get_param("~mode1_safe_start_enabled", False))
+        self.mode1_safe_joint_positions = np.array(
+            rospy.get_param("~mode1_safe_joint_positions", [0.0, -1.3, 1.4, -1.6, -1.57, 0.0]),
+            dtype=float,
+        )
+        if self.mode1_safe_joint_positions.shape != (6,):
+            raise ValueError("~mode1_safe_joint_positions must be a 6-element list")
+        self.mode1_safe_move_duration = float(rospy.get_param("~mode1_safe_move_duration", 2.0))
+        self.mode1_safe_settle_time = float(rospy.get_param("~mode1_safe_settle_time", 0.5))
+        self.mode1_safe_joint_tolerance = float(rospy.get_param("~mode1_safe_joint_tolerance", 0.08))
+        self.mode1_safe_start_completed = not (
+            self.control_mode == "mode1" and self.mode1_safe_start_enabled
+        )
+        self.mode1_reference_drift_rate = float(rospy.get_param("~mode1_reference_drift_rate", 4.0))
+        self.mode1_reference_drift_max_step = float(
+            rospy.get_param("~mode1_reference_drift_max_step", 0.002)
+        )
+        self.mode1_reference_max_offset = np.array(
+            rospy.get_param("~mode1_reference_max_offset", [0.15, 0.15, 0.15]), dtype=float
+        )
+        if self.mode1_reference_max_offset.shape != (3,):
+            raise ValueError("~mode1_reference_max_offset must be a 3-element list")
+
         self.current_joints = np.zeros(6)
         self.has_joint_state = False
         self.current_ee_pose = None
@@ -180,6 +209,7 @@ class UR5ActiveRehabAdmittanceController:
 
         self.nominal_position = np.zeros(3)
         self.nominal_orientation = np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
+        self.mode1_reference_origin = np.zeros(3)
         self.reference_initialized = False
 
         self.latest_trajectory_pose = None
@@ -189,6 +219,8 @@ class UR5ActiveRehabAdmittanceController:
         self.filtered_force = np.zeros(3)
         self.delta_x = np.zeros(3)
         self.delta_v = np.zeros(3)
+        self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(5.0))
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.ik_solver = UR5NumericIK()
 
@@ -214,6 +246,10 @@ class UR5ActiveRehabAdmittanceController:
         rospy.loginfo("  Md: %s", self.Md.tolist())
         rospy.loginfo("  Bd: %s", self.Bd.tolist())
         rospy.loginfo("  Kd: %s", self.Kd.tolist())
+        rospy.loginfo("  transform_wrench_to_reference_frame: %s", self.transform_wrench_to_reference_frame)
+        if self.control_mode == "mode1":
+            rospy.loginfo("  mode1_safe_start_enabled: %s", self.mode1_safe_start_enabled)
+            rospy.loginfo("  mode1_safe_joint_positions: %s", self.mode1_safe_joint_positions.tolist())
 
     @staticmethod
     def _normalize_quaternion(quat):
@@ -250,16 +286,58 @@ class UR5ActiveRehabAdmittanceController:
         self.current_ee_pose = msg
         self.has_ee_pose = True
 
-        if self.control_mode == "mode1" and not self.reference_initialized:
+        if (
+            self.control_mode == "mode1"
+            and self.mode1_safe_start_completed
+            and not self.reference_initialized
+        ):
             position, orientation = self._pose_to_arrays(msg)
             self.nominal_position = position
+            self.mode1_reference_origin = position.copy()
             self.nominal_orientation = self._normalize_quaternion(orientation)
             self.reference_initialized = True
             rospy.loginfo("Initialized mode1 reference from current end-effector pose")
 
+    def _transform_force_to_reference_frame(self, force, source_frame, stamp):
+        if not self.transform_wrench_to_reference_frame:
+            return force
+
+        target_frame = self.reference_frame_id
+        if not source_frame:
+            source_frame = self.wrench_fallback_frame_id
+        if not source_frame or source_frame == target_frame:
+            return force
+
+        lookup_stamp = stamp if stamp != rospy.Time() else rospy.Time(0)
+        timeout = rospy.Duration.from_sec(max(self.wrench_tf_lookup_timeout_sec, 0.0))
+        try:
+            transform = self.tf_buffer.lookup_transform(target_frame, source_frame, lookup_stamp, timeout)
+        except (
+            tf2_ros.LookupException,
+            tf2_ros.ConnectivityException,
+            tf2_ros.ExtrapolationException,
+        ) as exc:
+            rospy.logwarn_throttle(
+                1.0,
+                "wrench transform lookup failed: %s -> %s (%s)",
+                source_frame,
+                target_frame,
+                str(exc),
+            )
+            return force
+
+        quat = transform.transform.rotation
+        rotation = tf_t.quaternion_matrix([quat.x, quat.y, quat.z, quat.w])[:3, :3]
+        return rotation.dot(force)
+
     def wrench_cb(self, msg):
-        self.raw_force = np.array(
+        force = np.array(
             [msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z], dtype=float
+        )
+        self.raw_force = self._transform_force_to_reference_frame(
+            force,
+            msg.header.frame_id,
+            msg.header.stamp,
         )
 
     def trajectory_reference_cb(self, msg):
@@ -328,6 +406,97 @@ class UR5ActiveRehabAdmittanceController:
 
         self.command_pub.publish(traj)
 
+    def _publish_startup_joint_command(self, q_cmd, duration_sec):
+        traj = JointTrajectory()
+        traj.header.stamp = rospy.Time.now() + rospy.Duration.from_sec(0.2)
+        traj.joint_names = JOINT_NAMES
+
+        point = JointTrajectoryPoint()
+        point.positions = q_cmd.tolist()
+        point.time_from_start = rospy.Duration.from_sec(duration_sec)
+        traj.points = [point]
+
+        self.command_pub.publish(traj)
+
+    def _wait_for_controller_connection(self):
+        timeout_t = rospy.Time.now() + rospy.Duration(10.0)
+        rate = rospy.Rate(20)
+        while not rospy.is_shutdown() and self.command_pub.get_num_connections() == 0:
+            if rospy.Time.now() > timeout_t:
+                rospy.logwarn("No subscriber on %s yet, continue anyway.", self.command_topic)
+                return
+            rate.sleep()
+
+    def _run_mode1_safe_start(self):
+        if self.control_mode != "mode1" or not self.mode1_safe_start_enabled:
+            self.mode1_safe_start_completed = True
+            return
+
+        self._wait_for_controller_connection()
+
+        current_error = np.max(np.abs(self.current_joints - self.mode1_safe_joint_positions))
+        if current_error <= self.mode1_safe_joint_tolerance:
+            rospy.loginfo("Mode1 safe start skipped: robot already near configured safe pose")
+            self.mode1_safe_start_completed = True
+            return
+
+        rospy.loginfo(
+            "Mode1 safe start: moving to startup joint pose before enabling admittance reference"
+        )
+        self._publish_startup_joint_command(
+            self.mode1_safe_joint_positions,
+            max(self.mode1_safe_move_duration, 0.2),
+        )
+
+        deadline = rospy.Time.now() + rospy.Duration.from_sec(
+            max(self.mode1_safe_move_duration, 0.2) + max(self.mode1_safe_settle_time, 0.0) + 3.0
+        )
+        rate = rospy.Rate(self.control_rate_hz)
+        while not rospy.is_shutdown():
+            joint_error = np.max(np.abs(self.current_joints - self.mode1_safe_joint_positions))
+            if joint_error <= self.mode1_safe_joint_tolerance:
+                break
+            if rospy.Time.now() > deadline:
+                rospy.logwarn(
+                    "Mode1 safe start did not fully converge, continue with current pose. max joint error=%.3f rad",
+                    joint_error,
+                )
+                break
+            rate.sleep()
+
+        if self.mode1_safe_settle_time > 0.0:
+            rospy.sleep(self.mode1_safe_settle_time)
+
+        self.delta_x = np.zeros(3)
+        self.delta_v = np.zeros(3)
+        self.filtered_force = np.zeros(3)
+        self.raw_force = np.zeros(3)
+        self.mode1_safe_start_completed = True
+        rospy.loginfo("Mode1 safe start completed")
+
+    def _update_mode1_reference(self, dt):
+        if self.control_mode != "mode1" or not self.reference_initialized:
+            return
+
+        drift_step = self.mode1_reference_drift_rate * self.delta_x * dt
+        if self.mode1_reference_drift_max_step > 0.0:
+            drift_step = np.clip(
+                drift_step,
+                -self.mode1_reference_drift_max_step,
+                self.mode1_reference_drift_max_step,
+            )
+
+        self.nominal_position += drift_step
+        self.delta_x -= drift_step
+
+        if np.any(self.mode1_reference_max_offset > 0.0):
+            lower = self.mode1_reference_origin - self.mode1_reference_max_offset
+            upper = self.mode1_reference_origin + self.mode1_reference_max_offset
+            clamped_position = np.clip(self.nominal_position, lower, upper)
+            clamp_error = self.nominal_position - clamped_position
+            self.nominal_position = clamped_position
+            self.delta_x += clamp_error
+
     def run(self):
         rate = rospy.Rate(self.control_rate_hz)
         dt = 1.0 / self.control_rate_hz
@@ -335,6 +504,8 @@ class UR5ActiveRehabAdmittanceController:
         while not rospy.is_shutdown() and not self.has_joint_state:
             rospy.logwarn_throttle(2.0, "Waiting for /joint_states")
             rate.sleep()
+
+        self._run_mode1_safe_start()
 
         while not rospy.is_shutdown() and not self.has_ee_pose:
             rospy.logwarn_throttle(2.0, "Waiting for end-effector pose")
@@ -351,6 +522,7 @@ class UR5ActiveRehabAdmittanceController:
 
         while not rospy.is_shutdown():
             self._update_admittance(dt)
+            self._update_mode1_reference(dt)
 
             nominal_position, nominal_orientation = self._get_nominal_reference()
             target_position = nominal_position + self.delta_x

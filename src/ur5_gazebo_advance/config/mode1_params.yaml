@@ -1,12 +1,20 @@
 control_rate_hz: 100.0
 command_horizon: 0.05
 force_lpf_cutoff_hz: 10.0
-force_deadband: 0.0
+force_deadband: 0.1
 trajectory_reference_timeout: 0.2
+mode1_safe_start_enabled: true
+mode1_safe_joint_positions: [0.0, -1.3, 1.4, -1.6, -1.57, 0.0]
+mode1_safe_move_duration: 2.0
+mode1_safe_settle_time: 0.5
+mode1_safe_joint_tolerance: 0.08
+mode1_reference_drift_rate: 4.0
+mode1_reference_drift_max_step: 0.002
+mode1_reference_max_offset: [0.12, 0.12, 0.12]
 Md_diag: [1.0, 1.0, 1.0]
 Bd_diag: [10.0, 10.0, 10.0]
 Kd_diag: [20.0, 20.0, 20.0]
-max_correction: [0.10, 0.10, 0.10]
+max_correction: [0.06, 0.06, 0.06]
 ik_position_only: true
 ik_max_iter: 120
 ik_tol_pos: 0.001
