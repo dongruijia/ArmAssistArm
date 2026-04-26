@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""为康复轨迹目标位姿提供逆运动学解算结果。"""
+
 from collections import deque
 
 import numpy as np
@@ -14,6 +16,8 @@ RAD2DEG = 180.0 / np.pi
 
 
 class UR5RehabIKSolver:
+    """为康复控制器提供更稳健的逆运动学求解服务。"""
+
     def __init__(self):
         rospy.init_node("ur5_rehab_ik_solver", anonymous=True)
 
@@ -101,6 +105,8 @@ class UR5RehabIKSolver:
             pass
 
     def _find_seed_for_target(self, target_stamp):
+        """从上一解或历史关节状态中选择更合适的求解初值。"""
+
         if self.prefer_last_solution and self.last_solution is not None:
             return self.last_solution.copy(), self.last_solution_stamp
 
@@ -176,6 +182,8 @@ class UR5RehabIKSolver:
         return self.lambda_base + self.lambda_sing_gain / (w + 1e-6)
 
     def _pose_residual(self, q, Td, q_ref):
+        """构造 least_squares 使用的位姿残差与正则项。"""
+
         Tc = self.fk(q)
         ep = Td[:3, 3] - Tc[:3, 3]
         residual = [ep]
@@ -190,12 +198,15 @@ class UR5RehabIKSolver:
         return np.hstack(residual)
 
     def ik_solve(self, target_pose, q0):
+        """调用最小二乘优化求解单个目标位姿。"""
+
         tx, ty, tz, qx, qy, qz, qw = target_pose
         Td = tf_t.quaternion_matrix([qx, qy, qz, qw])
         Td[:3, 3] = (tx, ty, tz)
         q = np.clip(np.array(q0, dtype=float), self.joint_limits[0], self.joint_limits[1])
         q_ref = q.copy()
 
+        # 注意：这里显式带边界优化，能减少解超出关节限位的情况。
         result = least_squares(
             lambda joints: self._pose_residual(joints, Td, q_ref),
             q,

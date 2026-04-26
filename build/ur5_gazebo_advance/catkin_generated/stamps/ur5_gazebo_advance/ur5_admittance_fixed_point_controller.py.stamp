@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""固定点导纳控制节点，根据外力修正末端参考位置。"""
 
 import numpy as np
 import rospy
@@ -19,6 +20,8 @@ JOINT_NAMES = [
 
 
 class UR5NumericIK:
+    """供导纳控制器内部调用的轻量数值 IK 求解器。"""
+
     def __init__(self):
         self.dh = [
             (np.pi / 2.0, 0.0, 0.089159),
@@ -102,6 +105,8 @@ class UR5NumericIK:
         )
 
     def solve(self, target_pos, target_quat, q0):
+        """对当前参考位姿执行一次数值 IK 求解。"""
+
         Td = tf_t.quaternion_matrix(target_quat)
         Td[:3, 3] = target_pos
 
@@ -141,6 +146,8 @@ class UR5NumericIK:
 
 
 class UR5AdmittanceFixedPointController:
+    """根据测得外力在线修正固定点附近的末端参考位姿。"""
+
     def __init__(self):
         rospy.init_node("ur5_admittance_fixed_point_controller")
 
@@ -186,6 +193,7 @@ class UR5AdmittanceFixedPointController:
 
         self.ik_solver = UR5NumericIK()
 
+        # 订阅力和位姿反馈，输出经导纳修正后的关节轨迹与参考位姿。
         self.command_pub = rospy.Publisher(self.command_topic, JointTrajectory, queue_size=1)
         self.reference_pose_pub = rospy.Publisher(self.reference_pose_topic, PoseStamped, queue_size=10)
 
@@ -211,8 +219,11 @@ class UR5AdmittanceFixedPointController:
             return
 
     def ee_pose_cb(self, msg):
+        """需要时用当前末端位姿初始化固定参考点。"""
+
         self.current_ee_pose = msg
         self.has_ee_pose = True
+        # 注意：固定点只初始化一次，避免控制过程中参考点持续漂移。
         if self.use_current_pose_as_fixed and not self.nominal_set:
             self.fixed_position = np.array(
                 [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z], dtype=float
@@ -240,6 +251,7 @@ class UR5AdmittanceFixedPointController:
         )
 
     def _update_admittance(self, dt):
+        # 以质量-阻尼-刚度模型积分得到末端位置修正量。
         self.filtered_force = self.alpha * self.filtered_force + (1.0 - self.alpha) * self.raw_force
 
         if self.force_deadband > 0.0:
@@ -252,6 +264,8 @@ class UR5AdmittanceFixedPointController:
         self.delta_x = np.clip(self.delta_x, -self.max_correction, self.max_correction)
 
     def _publish_reference_pose(self, position):
+        """发布导纳修正后的参考位姿，便于可视化和调试。"""
+
         pose = PoseStamped()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "base_link"
@@ -265,6 +279,8 @@ class UR5AdmittanceFixedPointController:
         self.reference_pose_pub.publish(pose)
 
     def _publish_joint_command(self, q_cmd):
+        """将当前 IK 解打包成短时域关节指令。"""
+
         traj = JointTrajectory()
         traj.header.stamp = rospy.Time.now()
         traj.joint_names = JOINT_NAMES
@@ -277,6 +293,8 @@ class UR5AdmittanceFixedPointController:
         self.command_pub.publish(traj)
 
     def run(self):
+        """主循环：更新导纳状态、求解 IK、发布参考与控制命令。"""
+
         rate = rospy.Rate(self.control_rate_hz)
         dt = 1.0 / self.control_rate_hz
 

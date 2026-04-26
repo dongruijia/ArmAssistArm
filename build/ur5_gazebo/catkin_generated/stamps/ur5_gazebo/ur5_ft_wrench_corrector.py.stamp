@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""对力传感器数据进行去皮、缩放和偏置修正。"""
 
 import rospy
 from geometry_msgs.msg import WrenchStamped
@@ -6,14 +7,20 @@ from std_msgs.msg import Empty
 
 
 def _vec_sub(a, b):
+    """三维向量逐元素相减。"""
+
     return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 
 
 def _vec_mul(a, b):
+    """三维向量逐元素相乘。"""
+
     return [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
 
 class FTWrenchCorrector:
+    """对原始六维力数据做去皮和标定修正后再发布。"""
+
     def __init__(self):
         rospy.init_node("ur5_ft_wrench_corrector")
 
@@ -71,6 +78,8 @@ class FTWrenchCorrector:
         rospy.loginfo("tare requested: collecting %d samples", self.tare_sample_count)
 
     def _update_tare(self, force_raw, torque_raw):
+        """在去皮阶段累积样本并更新动态偏置。"""
+
         if not self._tare_active:
             return
 
@@ -98,6 +107,7 @@ class FTWrenchCorrector:
 
         self._update_tare(force_raw, torque_raw)
 
+        # 注意：若要求先去皮，完成前不会输出修正后的力数据。
         if self.require_tare_before_publish and not self._tare_completed:
             return
 

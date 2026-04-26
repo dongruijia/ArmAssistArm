@@ -5,6 +5,10 @@
   <arg name="start_wrench_corrector" default="true"/>
   <arg name="start_external_wrench_applier" default="true"/>
   <arg name="start_periodic_wrench" default="true"/>
+  <arg name="start_debug_visualizer" default="true"/>
+  <arg name="start_rviz" default="true"/>
+  <arg name="start_rqt_plots" default="false"/>
+  <arg name="start_report_plotter" default="true"/>
 
   <arg name="control_rate_hz" default="100.0"/>
   <arg name="force_lpf_cutoff_hz" default="10.0"/>
@@ -19,6 +23,8 @@
   <arg name="wrench_axis" default="x"/>
   <arg name="wrench_amplitude" default="10.0"/>
   <arg name="wrench_frequency" default="0.5"/>
+  <arg name="path_max_points" default="500"/>
+  <arg name="report_output_dir" default="~/.ros/ur5_admittance_reports"/>
 
   <group if="$(arg start_robot_bringup)">
     <include file="$(find ur_gazebo)/launch/ur5_bringup.launch">
@@ -84,4 +90,61 @@
     <param name="amplitude" value="$(arg wrench_amplitude)"/>
     <param name="frequency" value="$(arg wrench_frequency)"/>
   </node>
+
+      <node if="$(arg start_debug_visualizer)"
+        pkg="ur5_gazebo_advance"
+        type="ur5_admittance_debug_visualizer.py"
+        name="ur5_admittance_debug_visualizer"
+        output="screen">
+        <param name="raw_wrench_topic" value="/ur5/ft_sensor/wrench"/>
+        <param name="corrected_wrench_topic" value="/ur5/ft_sensor/wrench_corrected"/>
+        <param name="ee_pose_topic" value="/ur5/ee_pose"/>
+        <param name="reference_pose_topic" value="/ur5/admittance/reference_pose"/>
+        <param name="publish_rate_hz" value="$(arg control_rate_hz)"/>
+        <param name="force_lpf_cutoff_hz" value="$(arg force_lpf_cutoff_hz)"/>
+        <param name="default_frame_id" value="base_link"/>
+        <param name="path_max_points" value="$(arg path_max_points)"/>
+      </node>
+
+      <node if="$(arg start_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="ur5_admittance_rviz"
+        args="-d $(find ur5_gazebo_advance)/config/ur5_admittance_visualization.rviz"
+        output="screen"/>
+
+      <node if="$(arg start_rqt_plots)"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        name="ur5_admittance_force_plot"
+        args="/ur5/admittance/debug/raw_force_norm /ur5/admittance/debug/corrected_force_norm /ur5/admittance/debug/filtered_force_norm"
+        output="screen"/>
+
+      <node if="$(arg start_rqt_plots)"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        name="ur5_admittance_delta_plot"
+        args="/ur5/admittance/debug/delta_pos/vector/x /ur5/admittance/debug/delta_pos/vector/y /ur5/admittance/debug/delta_pos/vector/z /ur5/admittance/debug/delta_pos_norm"
+        output="screen"/>
+
+      <node if="$(arg start_rqt_plots)"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        name="ur5_wrench_compare_plot"
+        args="/ur5/ft_sensor/wrench/wrench/force/x /ur5/ft_sensor/wrench_corrected/wrench/force/x /ur5/admittance/debug/filtered_force/vector/x"
+        output="screen"/>
+
+      <node if="$(arg start_report_plotter)"
+            pkg="ur5_gazebo_advance"
+            type="ur5_admittance_report_plotter.py"
+            name="ur5_admittance_report_plotter"
+            output="screen">
+        <param name="raw_wrench_topic" value="/ur5/ft_sensor/wrench"/>
+        <param name="corrected_wrench_topic" value="/ur5/ft_sensor/wrench_corrected"/>
+        <param name="ee_pose_topic" value="/ur5/ee_pose"/>
+        <param name="reference_pose_topic" value="/ur5/admittance/reference_pose"/>
+        <param name="sample_rate_hz" value="50.0"/>
+        <param name="force_lpf_cutoff_hz" value="$(arg force_lpf_cutoff_hz)"/>
+        <param name="output_root_dir" value="$(arg report_output_dir)"/>
+      </node>
 </launch>

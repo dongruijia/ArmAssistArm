@@ -3,6 +3,7 @@ project(ur5_gazebo_advance)
 
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
+  nav_msgs
   rospy
   sensor_msgs
   std_msgs
@@ -18,6 +19,8 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/ur5_admittance_fixed_point_controller.py
   scripts/ur5_periodic_wrench_publisher.py
+  scripts/ur5_rehab_stability_line_controller.py
+  scripts/ur5_rehab_tracking_error_monitor.py
 
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

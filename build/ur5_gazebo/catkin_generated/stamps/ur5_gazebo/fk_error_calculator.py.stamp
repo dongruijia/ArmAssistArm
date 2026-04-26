@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
+"""对比自定义正运动学与 MoveIt 正运动学结果的误差。"""
+
 import rospy
 import numpy as np
 from geometry_msgs.msg import PoseStamped
 
 class FKErrorCalculator:
+    """接收两路末端位姿并实时输出误差对比结果。"""
+
     def __init__(self):
         rospy.init_node("fk_error_calculator")
         
-        self.pose_custom = None   # 你的正解
+        self.pose_custom = None   # 自身正解
         self.pose_moveit = None   # 官方正解
         
         # 订阅两个话题
@@ -30,6 +34,8 @@ class FKErrorCalculator:
             self.calculate_and_print_error()
 
     def calculate_and_print_error(self):
+        """分别计算位置误差和姿态误差并打印。"""
+
         # --------------------- 1. 计算位置误差（毫米） ---------------------
         dx = self.pose_custom.position.x - self.pose_moveit.position.x
         dy = self.pose_custom.position.y - self.pose_moveit.position.y
@@ -48,7 +54,7 @@ class FKErrorCalculator:
         # 转换为角度误差
         angle_error_deg = np.degrees(2 * np.arccos(abs(dot_product)))
 
-        # --------------------- 3. 打印结果（高亮绿色） ---------------------
+        # --------------------- 3. 打印结果---------------------------------
         rospy.loginfo("\033[1;32m"
                       f"位置误差：{position_error_mm:>6.2f} mm   |   "
                       f"姿态误差：{angle_error_deg:>6.2f} °"

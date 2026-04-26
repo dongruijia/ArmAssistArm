@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""发布预设关节轨迹，用于基础联调与演示。"""
+
 import math
 
 import rospy
@@ -16,6 +18,8 @@ JOINT_NAMES = [
 
 
 def make_point(positions, seconds):
+    """构造带执行时间的单个轨迹点。"""
+
     point = JointTrajectoryPoint()
     point.positions = positions
     point.time_from_start = rospy.Duration.from_sec(seconds)
@@ -23,6 +27,8 @@ def make_point(positions, seconds):
 
 
 def publish_demo_trajectory(pub):
+    """发布一条循环演示轨迹。"""
+
     traj = JointTrajectory()
     traj.joint_names = JOINT_NAMES
     traj.header.stamp = rospy.Time.now() + rospy.Duration(0.2)

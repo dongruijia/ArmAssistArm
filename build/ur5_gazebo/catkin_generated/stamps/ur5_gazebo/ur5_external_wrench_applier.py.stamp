@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""通过 Gazebo 服务向机械臂指定连杆持续施加外力。"""
 
 import threading
 
@@ -8,6 +9,8 @@ from geometry_msgs.msg import WrenchStamped
 
 
 class ExternalWrenchApplier:
+    """把输入力指令转换成 Gazebo 连续施力请求。"""
+
     def __init__(self):
         rospy.init_node("ur5_external_wrench_applier")
 
@@ -43,9 +46,12 @@ class ExternalWrenchApplier:
             self._last_cmd_time = rospy.Time.now()
 
     def _on_timer(self, _event):
+        """按固定频率重复施力，超时后自动回落为零外力。"""
+
         with self._lock:
             now = rospy.Time.now()
             is_active = (now - self._last_cmd_time).to_sec() <= self.command_timeout
+            # 注意：Gazebo 的施力持续时间较短，因此这里用定时器重复刷新。
             if is_active:
                 cmd = self._last_cmd
             else:

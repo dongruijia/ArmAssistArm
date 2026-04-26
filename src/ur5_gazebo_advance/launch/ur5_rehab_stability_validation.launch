@@ -16,7 +16,7 @@
     <param name="position_only" value="true"/>
   </node>
 
-  <node pkg="ur5_gazebo" type="ur5_rehab_tracking_error_monitor.py" name="ur5_rehab_tracking_error_monitor" output="screen">
+  <node pkg="ur5_gazebo_advance" type="ur5_rehab_tracking_error_monitor.py" name="ur5_rehab_tracking_error_monitor" output="screen">
     <param name="reference_topic" value="/ur5/stability_reference_pose"/>
     <param name="joint_topic" value="/joint_states"/>
     <param name="sample_dt" value="$(arg sample_dt)"/>
@@ -26,7 +26,7 @@
     <param name="eval_start_min_z" value="0.45"/>
   </node>
 
-  <node pkg="ur5_gazebo" type="ur5_rehab_stability_line_controller.py" name="ur5_rehab_stability_line_controller" output="screen">
+  <node pkg="ur5_gazebo_advance" type="ur5_rehab_stability_line_controller.py" name="ur5_rehab_stability_line_controller" output="screen">
     <param name="target_topic" value="/ur5/stability_target_pose"/>
     <param name="reference_topic" value="/ur5/stability_reference_pose"/>
     <param name="ik_output_topic" value="/ur5/stability_ik_solved_joints"/>

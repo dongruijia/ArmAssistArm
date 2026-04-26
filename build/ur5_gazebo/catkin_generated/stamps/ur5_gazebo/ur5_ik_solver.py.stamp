@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""使用数值迭代方法求解 UR5 逆运动学。"""
+
 import rospy
 import numpy as np
 import tf.transformations as tf_t
@@ -10,6 +12,8 @@ DEG2RAD = np.pi / 180.0
 RAD2DEG = 180.0 / np.pi
 
 class UR5IKNewtonRaphson:
+    """使用牛顿迭代和阻尼伪逆求解逆运动学。"""
+
     def __init__(self):
         rospy.init_node("ur5_ik_newton_raphson_node", anonymous=True)
 
@@ -84,6 +88,8 @@ class UR5IKNewtonRaphson:
             pass
 
     def _find_seed_for_target(self, target_stamp):
+        """优先选取时间上最接近目标的关节状态作为初值。"""
+
         if not self.joint_state_history:
             return self.current_joints.copy(), self.current_joint_stamp
 
@@ -111,6 +117,8 @@ class UR5IKNewtonRaphson:
         return tf_t.concatenate_matrices(T_rz, T_tz, T_tx, T_rx)
 
     def fk(self, q):
+        """按与 FK 节点一致的约定计算末端位姿。"""
+
         T = tf_t.rotation_matrix(self.base_yaw_correction, (0, 0, 1))
         for i in range(6):
             alpha, a, d = self.dh[i]
@@ -159,6 +167,8 @@ class UR5IKNewtonRaphson:
         return self.lambda_base + self.lambda_sing_gain / (w + 1e-6)
 
     def ik_solve(self, target_pose, q0):
+        """对单个目标位姿进行迭代求解。"""
+
         tx, ty, tz, qx, qy, qz, qw = target_pose
         Td = tf_t.quaternion_matrix([qx, qy, qz, qw])
         Td[:3, 3] = (tx, ty, tz)
@@ -189,7 +199,7 @@ class UR5IKNewtonRaphson:
             lam = self._adaptive_lambda(Jw)
             Jd = Jw.T @ np.linalg.inv(Jw @ Jw.T + (lam ** 2) * I)
 
-            # Null-space term: prefer solution near seed and away from joint limits.
+            # 注意：零空间项同时兼顾初值附近收敛和远离关节限位。
             grad = 0.7 * (q_ref - q) + 0.3 * (self.joint_centers - q)
             N = I - Jd @ Jw
 
@@ -207,6 +217,8 @@ class UR5IKNewtonRaphson:
         return q, False, self.max_iter, np.linalg.norm(ep), np.linalg.norm(eo)
 
     def pose_callback(self, msg):
+        """收到目标位姿后选择初值、求解并发布关节解。"""
+
         try:
             if not self.has_joint_state:
                 rospy.logwarn_throttle(2.0, "[IK] waiting for /joint_states")

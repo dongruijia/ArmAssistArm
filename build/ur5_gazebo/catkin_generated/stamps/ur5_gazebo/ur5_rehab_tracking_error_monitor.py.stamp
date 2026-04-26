@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""监测康复轨迹的参考位姿与实际位姿跟踪误差。"""
 
 from collections import deque
 
@@ -10,6 +11,8 @@ from sensor_msgs.msg import JointState
 
 
 class UR5RehabTrackingErrorMonitor:
+    """缓存参考轨迹并评估末端实际轨迹的跟踪误差。"""
+
     def __init__(self):
         rospy.init_node("ur5_rehab_tracking_error_monitor")
 
@@ -19,6 +22,8 @@ class UR5RehabTrackingErrorMonitor:
         self.match_tolerance = float(rospy.get_param("~match_tolerance", 0.03))
         self.expected_duration = float(rospy.get_param("~expected_duration", 5.0))
         self.sample_dt = float(rospy.get_param("~sample_dt", 0.01))
+        self.eval_start_delay = float(rospy.get_param("~eval_start_delay", 1.5))
+        self.eval_start_min_z = float(rospy.get_param("~eval_start_min_z", 0.45))
 
         self.joint_names = [
             "shoulder_pan_joint",
@@ -47,12 +52,20 @@ class UR5RehabTrackingErrorMonitor:
         self.expected_samples = int(round(self.expected_duration / self.sample_dt)) + 1
         self.reported_final = False
         self.last_ref_stamp = rospy.Time(0)
+        self.first_ref_stamp = rospy.Time(0)
+        self.first_ref_point = None
+        self.eval_started = False
 
         self.actual_pose_pub = rospy.Publisher(self.actual_pose_topic, PoseStamped, queue_size=10)
         rospy.Subscriber(self.reference_topic, PoseStamped, self.reference_cb)
         rospy.Subscriber(self.joint_topic, JointState, self.joint_cb)
 
-        rospy.loginfo("Tracking error monitor started, expected samples: %d", self.expected_samples)
+        rospy.loginfo(
+            "Tracking error monitor started, expected samples: %d, eval_start_delay=%.2fs, eval_start_min_z=%.3fm",
+            self.expected_samples,
+            self.eval_start_delay,
+            self.eval_start_min_z,
+        )
 
     def reference_cb(self, msg):
         point = np.array([
@@ -62,6 +75,19 @@ class UR5RehabTrackingErrorMonitor:
         ], dtype=float)
         self.reference_buffer.append((msg.header.stamp, point))
         self.last_ref_stamp = msg.header.stamp
+        if self.first_ref_point is None:
+            self.first_ref_stamp = msg.header.stamp
+            self.first_ref_point = point.copy()
+
+    def should_start_evaluation(self, stamp, actual_pos):
+        """满足抬臂和延时条件后再开始统计，避开起始扰动。"""
+
+        if self.first_ref_point is None:
+            return False
+
+        delay_ok = stamp >= self.first_ref_stamp + rospy.Duration.from_sec(self.eval_start_delay)
+        z_ok = actual_pos[2] >= self.eval_start_min_z
+        return delay_ok and z_ok
 
     def _dh_A(self, alpha, a, d, q):
         T_rz = tf_t.rotation_matrix(q, (0, 0, 1))
@@ -80,6 +106,8 @@ class UR5RehabTrackingErrorMonitor:
         return T
 
     def pop_matching_reference(self, stamp):
+        """按时间戳从缓存中取最接近的参考点。"""
+
         if not self.reference_buffer:
             return None
 
@@ -97,6 +125,7 @@ class UR5RehabTrackingErrorMonitor:
         if best_dt is None or best_dt > self.match_tolerance:
             return None
 
+        # 注意：匹配成功后顺带清掉更早的参考点，避免重复配对。
         while len(self.reference_buffer) > best_idx + 1:
             self.reference_buffer.popleft()
         self.reference_buffer.popleft()
@@ -121,6 +150,11 @@ class UR5RehabTrackingErrorMonitor:
         self.actual_pose_pub.publish(pose_msg)
 
     def maybe_report_final(self):
+        """样本足够或参考流结束后输出最终统计结果。"""
+
+        if not self.eval_started:
+            return
+
         if self.reported_final:
             return
 
@@ -152,6 +186,16 @@ class UR5RehabTrackingErrorMonitor:
         self.publish_actual_pose(msg.header.stamp, T)
 
         actual_pos = T[:3, 3]
+
+        if not self.eval_started:
+            if self.should_start_evaluation(msg.header.stamp, actual_pos):
+                self.eval_started = True
+                self.reference_buffer.clear()
+                self.error_samples = []
+                self.match_count = 0
+                rospy.loginfo("Start tracking error evaluation after arm raised")
+            return
+
         ref_point = self.pop_matching_reference(msg.header.stamp)
         if ref_point is None:
             self.maybe_report_final()

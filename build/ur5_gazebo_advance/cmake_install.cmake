@@ -60,3 +60,11 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo_advance" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo_advance/catkin_generated/installspace/ur5_periodic_wrench_publisher.py")
 endif()
 
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo_advance" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo_advance/catkin_generated/installspace/ur5_rehab_stability_line_controller.py")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/ur5_gazebo_advance" TYPE PROGRAM FILES "/home/jiaid/ur5_rehab_ws/build/ur5_gazebo_advance/catkin_generated/installspace/ur5_rehab_tracking_error_monitor.py")
+endif()
+

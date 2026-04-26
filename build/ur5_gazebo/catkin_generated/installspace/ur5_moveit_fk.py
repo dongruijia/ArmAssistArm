@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""调用 MoveIt FK 服务并发布 UR5 末端位姿。"""
+
 import rospy
 import numpy as np
 from sensor_msgs.msg import JointState
@@ -7,6 +9,8 @@ from moveit_msgs.srv import GetPositionFK, GetPositionFKRequest
 from std_msgs.msg import Header
 
 class UR5MoveItFKNode:
+    """将关节状态送入 MoveIt FK 服务，并转成话题输出。"""
+
     def __init__(self):
         rospy.init_node("ur5_moveit_fk")
         
@@ -31,13 +35,15 @@ class UR5MoveItFKNode:
         ]
 
     def joint_cb(self, msg):
+        """收到关节状态后请求 MoveIt 计算当前末端位姿。"""
+
         try:
             q = [msg.position[msg.name.index(j)] for j in self.JOINT_NAMES]
 
             req = GetPositionFKRequest()
             req.header.frame_id = self.ROOT_LINK
 
-            # ====================== 修复 2：使用消息时间戳，适配仿真 ======================
+            # 注意：这里沿用 joint_states 的时间戳，便于和仿真/其他节点做时序对齐。
             req.header.stamp = msg.header.stamp  
 
             req.fk_link_names = [self.TIP_LINK]

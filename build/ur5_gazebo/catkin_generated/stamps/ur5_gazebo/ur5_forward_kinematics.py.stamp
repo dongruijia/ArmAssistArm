@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""根据关节状态实时计算并发布 UR5 末端位姿。"""
+
 import rospy
 import numpy as np
 import tf.transformations as tf_t
@@ -6,6 +8,8 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped
 
 class UR5ForwardKinematicsNode:
+    """基于 DH 参数计算 UR5 当前末端位姿。"""
+
     def __init__(self):
         rospy.init_node("ur5_fk_solver", anonymous=True)
 
@@ -51,6 +55,8 @@ class UR5ForwardKinematicsNode:
         return tf_t.concatenate_matrices(T_rz, T_tz, T_tx, T_rx)
 
     def joint_callback(self, msg):
+        """将 joint_states 按固定关节顺序重排后执行正运动学。"""
+
         try:
             # 确保消息包含所有需要的关节
             if not all(name in msg.name for name in self.joint_names):
@@ -59,7 +65,7 @@ class UR5ForwardKinematicsNode:
             joint_map = dict(zip(msg.name, msg.position))
             q_values = [joint_map[name] for name in self.joint_names]
 
-            # Fixed correction from base_link to DH base frame.
+            # 注意：这里的固定旋转需要与 IK 节点保持一致，否则两者参考系会错位。
             T_base = tf_t.rotation_matrix(self.base_yaw_correction, (0, 0, 1))
             T_total = T_base
 
@@ -79,6 +85,8 @@ class UR5ForwardKinematicsNode:
             rospy.logerr("FK failed: %s", str(e))
 
     def publish_pose(self, T):
+        """将齐次变换矩阵转换为 PoseStamped 发布。"""
+
         msg = PoseStamped()
         msg.header.stamp = rospy.Time.now()
         msg.header.frame_id = "base_link"
