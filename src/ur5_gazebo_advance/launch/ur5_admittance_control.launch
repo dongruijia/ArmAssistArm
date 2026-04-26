@@ -18,6 +18,8 @@
 
   <arg name="fixed_position" default="[0.45, 0.0, 0.55]"/>
   <arg name="fixed_orientation" default="[0.0, 0.0, 0.0, 1.0]"/>
+  <arg name="ik_position_only" default="false"/>
+  <arg name="ik_orientation_weight" default="0.20"/>
 
   <arg name="md_diag" default="[1.0, 1.0, 1.0]"/>
   <arg name="bd_diag" default="[50.0, 50.0, 50.0]"/>
@@ -46,6 +48,10 @@
       <arg name="tare_topic" value="/ur5/ft_sensor/tare"/>
       <arg name="use_initial_tare" value="false"/>
       <arg name="require_tare_before_publish" value="false"/>
+      <arg name="enable_gravity_compensation" value="true"/>
+      <arg name="distal_mass_kg" value="0.1879"/>
+      <arg name="gravity_reference_frame" value="base_link"/>
+      <arg name="sensor_frame_fallback" value="wrist_3_link"/>
     </include>
   </group>
 
@@ -80,7 +86,8 @@
     <rosparam param="Bd_diag" subst_value="true">$(arg bd_diag)</rosparam>
     <rosparam param="Kd_diag" subst_value="true">$(arg kd_diag)</rosparam>
 
-    <param name="ik_position_only" value="true"/>
+    <param name="ik_position_only" value="$(arg ik_position_only)"/>
+    <param name="ik_orientation_weight" value="$(arg ik_orientation_weight)"/>
     <param name="use_current_pose_as_fixed" value="false"/>
   </node>
 

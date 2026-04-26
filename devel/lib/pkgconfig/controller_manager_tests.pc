@@ -1,0 +1,8 @@
+prefix=/home/jiaid/ur5_rehab_ws/devel
+
+Name: controller_manager_tests
+Description: Description of controller_manager_tests
+Version: 0.20.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

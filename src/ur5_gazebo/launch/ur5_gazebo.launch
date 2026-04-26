@@ -20,6 +20,8 @@
   <node pkg="ur5_gazebo" type="ur5_rehab_ik_solver.py" name="ur5_rehab_ik_solver" output="screen">
     <param name="target_topic" value="/ur5/rehab_target_pose"/>
     <param name="output_topic" value="/ur5/rehab_ik_solved_joints"/>
+    <param name="position_only" value="false"/>
+    <param name="orientation_weight" value="0.20"/>
   </node>
 
   <!-- 启动康复训练轨迹跟踪节点，生成三类五次插值笛卡尔轨迹并发送至位置控制器 -->

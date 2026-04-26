@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""对力传感器数据进行去皮、缩放和偏置修正。"""
+"""对力传感器数据进行去皮、缩放、重力和偏置修正。"""
 
+import numpy as np
 import rospy
+import tf.transformations as tf_t
+import tf2_ros
 from geometry_msgs.msg import WrenchStamped
 from std_msgs.msg import Empty
 
@@ -36,6 +39,21 @@ class FTWrenchCorrector:
         self.static_torque_bias = self._read_vec_param("~static_torque_bias", [0.0, 0.0, 0.0])
         self.force_scale = self._read_vec_param("~force_scale", [1.0, 1.0, 1.0])
         self.torque_scale = self._read_vec_param("~torque_scale", [1.0, 1.0, 1.0])
+        self.enable_gravity_compensation = bool(
+            rospy.get_param("~enable_gravity_compensation", False)
+        )
+        self.distal_mass_kg = float(rospy.get_param("~distal_mass_kg", 0.0))
+        self.gravity_reference_frame = rospy.get_param("~gravity_reference_frame", "base_link")
+        self.sensor_frame_fallback = rospy.get_param("~sensor_frame_fallback", "")
+        self.gravity_tf_lookup_timeout_sec = float(
+            rospy.get_param("~gravity_tf_lookup_timeout_sec", 0.02)
+        )
+        self.gravity_vector = np.array(
+            self._read_vec_param("~gravity_vector", [0.0, 0.0, -9.81]), dtype=float
+        )
+        self.gravity_force_sign = np.array(
+            self._read_vec_param("~gravity_force_sign", [1.0, 1.0, 1.0]), dtype=float
+        )
 
         self.dynamic_force_bias = [0.0, 0.0, 0.0]
         self.dynamic_torque_bias = [0.0, 0.0, 0.0]
@@ -45,6 +63,8 @@ class FTWrenchCorrector:
         self._tare_completed = not self.require_tare_before_publish and not self.use_initial_tare
         self._force_acc = [0.0, 0.0, 0.0]
         self._torque_acc = [0.0, 0.0, 0.0]
+        self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(5.0))
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.corrected_pub = rospy.Publisher(self.corrected_topic, WrenchStamped, queue_size=50)
         self.raw_sub = rospy.Subscriber(self.raw_topic, WrenchStamped, self._raw_cb, queue_size=200)
@@ -60,6 +80,13 @@ class FTWrenchCorrector:
         rospy.loginfo("  static_torque_bias: %s", self.static_torque_bias)
         rospy.loginfo("  force_scale: %s", self.force_scale)
         rospy.loginfo("  torque_scale: %s", self.torque_scale)
+        rospy.loginfo("  enable_gravity_compensation: %s", self.enable_gravity_compensation)
+        if self.enable_gravity_compensation:
+            rospy.loginfo("  distal_mass_kg: %.6f", self.distal_mass_kg)
+            rospy.loginfo("  gravity_reference_frame: %s", self.gravity_reference_frame)
+            rospy.loginfo("  sensor_frame_fallback: %s", self.sensor_frame_fallback)
+            rospy.loginfo("  gravity_vector: %s", self.gravity_vector.tolist())
+            rospy.loginfo("  gravity_force_sign: %s", self.gravity_force_sign.tolist())
 
     @staticmethod
     def _read_vec_param(name, default):
@@ -101,11 +128,51 @@ class FTWrenchCorrector:
             rospy.loginfo("  dynamic_force_bias: %s", self.dynamic_force_bias)
             rospy.loginfo("  dynamic_torque_bias: %s", self.dynamic_torque_bias)
 
-    def _raw_cb(self, msg):
-        force_raw = [msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z]
-        torque_raw = [msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z]
+    def _gravity_force_bias(self, source_frame, stamp):
+        if not self.enable_gravity_compensation or self.distal_mass_kg <= 0.0:
+            return np.zeros(3, dtype=float)
 
-        self._update_tare(force_raw, torque_raw)
+        if not source_frame:
+            source_frame = self.sensor_frame_fallback
+        if not source_frame:
+            return np.zeros(3, dtype=float)
+
+        lookup_stamp = stamp if stamp != rospy.Time() else rospy.Time(0)
+        timeout = rospy.Duration.from_sec(max(self.gravity_tf_lookup_timeout_sec, 0.0))
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                source_frame,
+                self.gravity_reference_frame,
+                lookup_stamp,
+                timeout,
+            )
+        except (
+            tf2_ros.LookupException,
+            tf2_ros.ConnectivityException,
+            tf2_ros.ExtrapolationException,
+        ) as exc:
+            rospy.logwarn_throttle(
+                1.0,
+                "gravity compensation transform lookup failed: %s -> %s (%s)",
+                self.gravity_reference_frame,
+                source_frame,
+                str(exc),
+            )
+            return np.zeros(3, dtype=float)
+
+        quat = transform.transform.rotation
+        rotation = tf_t.quaternion_matrix([quat.x, quat.y, quat.z, quat.w])[:3, :3]
+        gravity_force_ref = self.distal_mass_kg * self.gravity_vector
+        gravity_force_sensor = rotation.dot(gravity_force_ref)
+        return gravity_force_sensor * self.gravity_force_sign
+
+    def _raw_cb(self, msg):
+        force_raw = np.array([msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z], dtype=float)
+        torque_raw = [msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z]
+        force_gravity_bias = self._gravity_force_bias(msg.header.frame_id, msg.header.stamp)
+        force_input = (force_raw - force_gravity_bias).tolist()
+
+        self._update_tare(force_input, torque_raw)
 
         # 注意：若要求先去皮，完成前不会输出修正后的力数据。
         if self.require_tare_before_publish and not self._tare_completed:
@@ -122,7 +189,7 @@ class FTWrenchCorrector:
             self.static_torque_bias[2] + self.dynamic_torque_bias[2],
         ]
 
-        force_corrected = _vec_mul(_vec_sub(force_raw, total_force_bias), self.force_scale)
+        force_corrected = _vec_mul(_vec_sub(force_input, total_force_bias), self.force_scale)
         torque_corrected = _vec_mul(_vec_sub(torque_raw, total_torque_bias), self.torque_scale)
 
         out = WrenchStamped()

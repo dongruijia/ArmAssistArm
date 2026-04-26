@@ -11,6 +11,13 @@
   <arg name="static_torque_bias" default="[0.0, 0.0, 0.0]"/>
   <arg name="force_scale" default="[1.0, 1.0, 1.0]"/>
   <arg name="torque_scale" default="[1.0, 1.0, 1.0]"/>
+  <arg name="enable_gravity_compensation" default="false"/>
+  <arg name="distal_mass_kg" default="0.0"/>
+  <arg name="gravity_reference_frame" default="base_link"/>
+  <arg name="sensor_frame_fallback" default="wrist_3_link"/>
+  <arg name="gravity_tf_lookup_timeout_sec" default="0.02"/>
+  <arg name="gravity_vector" default="[0.0, 0.0, -9.81]"/>
+  <arg name="gravity_force_sign" default="[1.0, 1.0, 1.0]"/>
 
   <node pkg="ur5_gazebo" type="ur5_ft_wrench_corrector.py" name="ur5_ft_wrench_corrector" output="screen">
     <param name="raw_topic" value="$(arg raw_topic)"/>
@@ -20,10 +27,17 @@
     <param name="use_initial_tare" value="$(arg use_initial_tare)"/>
     <param name="tare_sample_count" value="$(arg tare_sample_count)"/>
     <param name="require_tare_before_publish" value="$(arg require_tare_before_publish)"/>
+    <param name="enable_gravity_compensation" value="$(arg enable_gravity_compensation)"/>
+    <param name="distal_mass_kg" value="$(arg distal_mass_kg)"/>
+    <param name="gravity_reference_frame" value="$(arg gravity_reference_frame)"/>
+    <param name="sensor_frame_fallback" value="$(arg sensor_frame_fallback)"/>
+    <param name="gravity_tf_lookup_timeout_sec" value="$(arg gravity_tf_lookup_timeout_sec)"/>
 
     <rosparam param="static_force_bias" subst_value="true">$(arg static_force_bias)</rosparam>
     <rosparam param="static_torque_bias" subst_value="true">$(arg static_torque_bias)</rosparam>
     <rosparam param="force_scale" subst_value="true">$(arg force_scale)</rosparam>
     <rosparam param="torque_scale" subst_value="true">$(arg torque_scale)</rosparam>
+    <rosparam param="gravity_vector" subst_value="true">$(arg gravity_vector)</rosparam>
+    <rosparam param="gravity_force_sign" subst_value="true">$(arg gravity_force_sign)</rosparam>
   </node>
 </launch>
