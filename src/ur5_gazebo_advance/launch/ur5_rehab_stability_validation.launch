@@ -13,7 +13,7 @@
   <node pkg="ur5_gazebo" type="ur5_rehab_ik_solver.py" name="ur5_rehab_ik_solver" output="screen">
     <param name="target_topic" value="/ur5/stability_target_pose"/>
     <param name="output_topic" value="/ur5/stability_ik_solved_joints"/>
-    <param name="position_only" value="true"/>
+    <param name="position_only" value="false"/>
   </node>
 
   <node pkg="ur5_gazebo_advance" type="ur5_rehab_tracking_error_monitor.py" name="ur5_rehab_tracking_error_monitor" output="screen">
