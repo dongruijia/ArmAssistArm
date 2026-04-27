@@ -1,0 +1,30 @@
+<launch>
+    <!-- Headless-friendly toggles. Enable GUI tools explicitly when needed. -->
+    <arg name="gazebo_gui" default="false" />
+    <arg name="launch_rviz" default="false" />
+
+    <!-- 1. 启动Gazebo UR5仿真（可选：如果你的MoveIt会自动启动Gazebo，可注释掉这部分） -->
+    <include file="$(find ur_gazebo)/launch/ur5_bringup.launch">
+        <arg name="gui" value="$(arg gazebo_gui)" />
+    </include>
+
+    <!-- 2. 启动MoveIt控制节点（带仿真参数） -->
+    <include file="$(find ur5_moveit_config)/launch/moveit_planning_execution.launch">
+        <arg name="sim" value="true" />
+    </include>
+
+    <!-- 3. 启动RViz可视化（按需开启） -->
+    <group if="$(arg launch_rviz)">
+        <include file="$(find ur5_moveit_config)/launch/moveit_rviz.launch">
+            <arg name="config" value="true" />
+        </include>
+    </group>
+
+    <!-- 4. 启动你的单节点精度验证程序 -->
+    <node name="ur5_fk_node" 
+          pkg="ur5_kinematics" 
+          type="ur5_fk_node" 
+          output="screen"
+          respawn="false">
+    </node>
+</launch>

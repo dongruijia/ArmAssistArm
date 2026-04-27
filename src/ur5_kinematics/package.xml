@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ur5_kinematics</name>
+  <version>0.0.0</version>
+  <description>The ur5_kinematics package</description>
+
+  <maintainer email="todo@todo.todo">ross</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- 核心ROS依赖 -->
+  <build_depend>roscpp</build_depend>
+  <exec_depend>roscpp</exec_depend>
+
+  <build_depend>std_msgs</build_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <build_depend>sensor_msgs</build_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+
+  <build_depend>geometry_msgs</build_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+
+  <!-- TF坐标变换依赖（FK/IK必需） -->
+  <build_depend>tf2_ros</build_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <build_depend>tf2_geometry_msgs</build_depend>
+  <exec_depend>tf2_geometry_msgs</exec_depend>
+
+  <!-- KDL运动学依赖（FK/IK核心） -->
+  <build_depend>kdl_parser</build_depend>
+  <exec_depend>kdl_parser</exec_depend>
+
+  <build_depend>orocos_kdl</build_depend>
+  <exec_depend>orocos_kdl</exec_depend>
+
+<build_depend>message_generation</build_depend>
+<exec_depend>message_runtime</exec_depend>
+
+<depend>nav_msgs</depend>
+  <export>
+  </export>
+</package>

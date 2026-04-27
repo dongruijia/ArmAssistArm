@@ -1,0 +1,15 @@
+# 请求数据 Request
+float64 target_x
+float64 target_y
+float64 target_z
+float64 roll
+float64 pitch
+float64 yaw
+float64[] joint_prev
+
+---
+# 响应数据 Response（必须加 --- 分隔！）
+bool success
+int32 error_code
+float64 max_angle_error_deg
+float64[] joint_positions
