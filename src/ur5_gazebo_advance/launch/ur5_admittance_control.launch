@@ -26,8 +26,15 @@
   <arg name="kd_diag" default="[200.0, 200.0, 200.0]"/>
 
   <arg name="wrench_axis" default="x"/>
+  <arg name="wrench_mode" default="periodic"/>
   <arg name="wrench_amplitude" default="10.0"/>
   <arg name="wrench_frequency" default="0.5"/>
+  <arg name="wrench_constant_value" default="$(arg wrench_amplitude)"/>
+  <arg name="wrench_rate_hz" default="200.0"/>
+  <arg name="apply_rate_hz" default="200.0"/>
+  <arg name="command_timeout" default="0.03"/>
+  <arg name="wrench_duration" default="0.015"/>
+  <arg name="timeout_hold_cycles" default="2"/>
   <arg name="path_max_points" default="500"/>
   <arg name="report_output_dir" default="~/.ros/ur5_admittance_reports"/>
 
@@ -60,8 +67,10 @@
       <arg name="body_name" value="robot::wrist_3_link"/>
       <arg name="command_topic" value="/ur5/ft_sensor/command_wrench"/>
       <arg name="reference_frame" value="world"/>
-      <arg name="apply_rate_hz" value="100.0"/>
-      <arg name="command_timeout" value="0.3"/>
+      <arg name="apply_rate_hz" value="$(arg apply_rate_hz)"/>
+      <arg name="command_timeout" value="$(arg command_timeout)"/>
+      <arg name="wrench_duration" value="$(arg wrench_duration)"/>
+      <arg name="timeout_hold_cycles" value="$(arg timeout_hold_cycles)"/>
     </include>
   </group>
 
@@ -98,10 +107,12 @@
         output="screen">
     <param name="topic" value="/ur5/ft_sensor/command_wrench"/>
     <param name="frame_id" value="world"/>
-    <param name="rate_hz" value="100.0"/>
+    <param name="rate_hz" value="$(arg wrench_rate_hz)"/>
     <param name="axis" value="$(arg wrench_axis)"/>
+    <param name="mode" value="$(arg wrench_mode)"/>
     <param name="amplitude" value="$(arg wrench_amplitude)"/>
     <param name="frequency" value="$(arg wrench_frequency)"/>
+    <param name="constant_value" value="$(arg wrench_constant_value)"/>
   </node>
 
       <node if="$(arg start_debug_visualizer)"

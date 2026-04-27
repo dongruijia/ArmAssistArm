@@ -20,13 +20,30 @@ class ExternalWrenchApplier:
         self.use_msg_frame = bool(rospy.get_param("~use_msg_frame", False))
         self.apply_rate_hz = float(rospy.get_param("~apply_rate_hz", 100.0))
         self.command_timeout = float(rospy.get_param("~command_timeout", 0.3))
+        self.timeout_hold_cycles = int(rospy.get_param("~timeout_hold_cycles", 2))
+        self.wrench_duration = float(
+            rospy.get_param("~wrench_duration", 1.5 / max(self.apply_rate_hz, 1.0))
+        )
+
+        if self.wrench_duration <= 0.0:
+            raise ValueError("~wrench_duration must be positive")
+        if self.command_timeout < self.wrench_duration:
+            rospy.logwarn(
+                "command_timeout %.3f is shorter than wrench_duration %.3f; raising timeout to avoid premature zeroing",
+                self.command_timeout,
+                self.wrench_duration,
+            )
+            self.command_timeout = self.wrench_duration
 
         self._lock = threading.Lock()
         self._last_cmd = WrenchStamped()
         self._last_cmd_time = rospy.Time(0)
+        self._timeout_miss_count = 0
 
         rospy.wait_for_service("/gazebo/apply_body_wrench")
-        self.apply_wrench = rospy.ServiceProxy("/gazebo/apply_body_wrench", ApplyBodyWrench)
+        self.apply_wrench = rospy.ServiceProxy(
+            "/gazebo/apply_body_wrench", ApplyBodyWrench, persistent=True
+        )
 
         self.command_sub = rospy.Subscriber(
             self.command_topic, WrenchStamped, self._command_cb, queue_size=10
@@ -39,11 +56,15 @@ class ExternalWrenchApplier:
         rospy.loginfo("  command_topic: %s", self.command_topic)
         rospy.loginfo("  reference_frame: %s", self.reference_frame)
         rospy.loginfo("  apply_rate_hz: %.1f", self.apply_rate_hz)
+        rospy.loginfo("  command_timeout: %.3f", self.command_timeout)
+        rospy.loginfo("  wrench_duration: %.3f", self.wrench_duration)
+        rospy.loginfo("  timeout_hold_cycles: %d", self.timeout_hold_cycles)
 
     def _command_cb(self, msg):
         with self._lock:
             self._last_cmd = msg
             self._last_cmd_time = rospy.Time.now()
+            self._timeout_miss_count = 0
 
     def _on_timer(self, _event):
         """按固定频率重复施力，超时后自动回落为零外力。"""
@@ -54,6 +75,15 @@ class ExternalWrenchApplier:
             # 注意：Gazebo 的施力持续时间较短，因此这里用定时器重复刷新。
             if is_active:
                 cmd = self._last_cmd
+                self._timeout_miss_count = 0
+            elif (
+                self.timeout_hold_cycles > 0
+                and self._last_cmd_time.to_sec() > 0.0
+                and self._timeout_miss_count < self.timeout_hold_cycles
+            ):
+                # 对短时通信抖动做零阶保持，避免在正弦激励下出现非物理归零尖峰。
+                cmd = self._last_cmd
+                self._timeout_miss_count += 1
             else:
                 cmd = WrenchStamped()
 
@@ -67,7 +97,7 @@ class ExternalWrenchApplier:
 
         request.wrench = cmd.wrench
         request.start_time = rospy.Time(0)
-        request.duration = rospy.Duration(1.0 / max(self.apply_rate_hz, 1.0))
+        request.duration = rospy.Duration(self.wrench_duration)
 
         try:
             response = self.apply_wrench(request)
