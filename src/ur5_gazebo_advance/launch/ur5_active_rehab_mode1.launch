@@ -48,6 +48,9 @@
     <param name="wrench_topic" value="/ur5/ft_sensor/wrench_corrected"/>
     <param name="ee_pose_topic" value="/ur5/end_effector_pose"/>
     <param name="command_topic" value="/ur5_arm_controller/command"/>
+    <param name="reference_frame_id" value="base_link"/>
+    <param name="transform_wrench_to_reference_frame" value="true"/>
+    <param name="wrench_fallback_frame_id" value="flange"/>
     <param name="reference_pose_topic" value="/ur5/active_rehab/reference_pose"/>
     <param name="nominal_reference_topic" value="/ur5/active_rehab/nominal_reference_pose"/>
     <rosparam command="load" file="$(find ur5_gazebo_advance)/config/mode1_params.yaml"/>
