@@ -1,8 +1,0 @@
-prefix=/home/jiaid/ur5_rehab_ws/install
-
-Name: ur5_kinematics
-Description: Description of ur5_kinematics
-Version: 0.0.0
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib 
-Requires: message_runtime
