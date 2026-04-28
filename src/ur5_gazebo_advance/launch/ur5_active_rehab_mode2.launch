@@ -74,7 +74,7 @@
   </node>
 
   <node if="$(arg start_error_monitor)"
-        pkg="ur5_gazebo"
+        pkg="ur5_gazebo_advance"
         type="ur5_rehab_tracking_error_monitor.py"
         name="ur5_active_rehab_mode2_error_monitor"
         output="screen">
