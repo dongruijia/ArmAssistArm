@@ -126,8 +126,9 @@ class UR5RehabTrackingErrorMonitor:
             return None
 
         # 注意：匹配成功后顺带清掉更早的参考点，避免重复配对。
-        while len(self.reference_buffer) > best_idx + 1:
+        while best_idx > 0:
             self.reference_buffer.popleft()
+            best_idx -= 1
         self.reference_buffer.popleft()
         return best_point
 

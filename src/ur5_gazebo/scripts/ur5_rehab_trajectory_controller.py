@@ -101,6 +101,8 @@ class UR5RehabTrajectoryController:
         T = self.compute_fk(self.current_joints)
         quat = np.array(tf_t.quaternion_from_matrix(T), dtype=float)
         quat /= np.linalg.norm(quat)
+
+      
         return quat
 
     def compute_fk(self, q):
@@ -147,7 +149,8 @@ class UR5RehabTrajectoryController:
         center = np.array([0.5, 0.0, 0.5], dtype=float)
         radius = 0.15
         times, scalars = self.quintic_scalars(6.0)
-        theta = np.pi * scalars
+        # Use the opposite semicircle while preserving start/end points.
+        theta = -np.pi * scalars
 
         points = np.zeros((len(times), 3), dtype=float)
         points[:, 0] = center[0] + radius * np.cos(theta)

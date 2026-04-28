@@ -58,7 +58,7 @@
       <arg name="enable_gravity_compensation" value="true"/>
       <arg name="distal_mass_kg" value="0.1879"/>
       <arg name="gravity_reference_frame" value="base_link"/>
-      <arg name="sensor_frame_fallback" value="wrist_3_link"/>
+      <arg name="sensor_frame_fallback" value="tool0"/>
     </include>
   </group>
 

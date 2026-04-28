@@ -70,8 +70,9 @@ class IKAccuracyVerifier:
         if best_dt is None or best_dt > self.match_tolerance:
             return None
 
-        while len(self.original_buffer) > best_idx + 1:
+        while best_idx > 0:
             self.original_buffer.popleft()
+            best_idx -= 1
 
         self.original_buffer.popleft()
         return best_joints
