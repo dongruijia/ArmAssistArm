@@ -1,8 +1,0 @@
-prefix=/home/jiaid/ur5_rehab_ws/install
-
-Name: ur5_gazebo_advance
-Description: Description of ur5_gazebo_advance
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: gazebo_msgs geometry_msgs nav_msgs roscpp rospy sensor_msgs std_msgs tf2_ros trajectory_msgs visualization_msgs

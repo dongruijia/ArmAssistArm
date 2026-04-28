@@ -1,8 +1,0 @@
-prefix=/home/jiaid/ur5_rehab_ws/install
-
-Name: rqt_joint_trajectory_controller
-Description: Description of rqt_joint_trajectory_controller
-Version: 0.22.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 
