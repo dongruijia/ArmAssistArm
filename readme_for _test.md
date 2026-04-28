@@ -34,7 +34,7 @@ roslaunch ur5_gazebo ur5_gazebo.launch
 
 - 如果你想查看附加任务中的恒力模式，且想要查看六维传感器的测量精度，请运行：
 ```bash
-
+roslaunch ur5_gazebo_advance ur5_admittance_control.launch   wrench_mode:=constant   wrench_axis:=x   wrench_constant_value:=8.0
 ```
 如果你想更清楚的观测数据，请安装：
 ```bash
@@ -44,8 +44,10 @@ sudo apt install ros-noetic-plotjuggler-ros
 然后操作如下：
 首先点击页面中的“start”
 ![alt text](./img/image.png)
+
 选中这两项：
 ![alt text](./img/image-1.png)
+
 在这个窗口中把想要观测的数据拖动到右侧大窗口
 ![alt text](./img/image-2.png)
 
